@@ -1,8 +1,11 @@
+-- 🇹🇷 TURCJA HUB v7.0 - PROFESSIONAL UNIVERSAL EXPLOIT
+-- Wszystko naprawione + Języki + Game Detection + FPS Booster + GitHub Scripts
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
-   Name = "Turcja Hub v1.0",
-   LoadingTitle = "Turcja Hub v1.0",
-   LoadingSubtitle = "Loading...",
+   Name = "🇹🇷 Turcja Hub v7.0",
+   LoadingTitle = "Turcja Hub v7.0 Pro",
+   LoadingSubtitle = "Powered by Turcja",
    ConfigurationSaving = {Enabled = true, FolderName = "TurcjaHubPro", FileName = "ProConfig"},
    KeySystem = false
 })
@@ -52,22 +55,22 @@ spawn(function()
 end)
 
 -- TABS
-local CombatTab = Window:CreateTab("Combat", 4483362458)
-local MovementTab = Window:CreateTab("Movement", 4483362458)
-local VisualsTab = Window:CreateTab("Visuals", 4483362458)
-local PlayerTab = Window:CreateTab("Player", 4483362458)
-local SettingsTab = Window:CreateTab("Ustawienia", 4483362458)
+local CombatTab = Window:CreateTab("⚔️ Combat", 4483362458)
+local MovementTab = Window:CreateTab("🚀 Movement", 4483362458)
+local VisualsTab = Window:CreateTab("👁️ Visuals", 4483362458)
+local PlayerTab = Window:CreateTab("👤 Player", 4483362458)
+local SettingsTab = Window:CreateTab("⚙️ Ustawienia", 4483362458)
 
 -- GAME SPECIFIC TABS
 local BrookTab, CaseTab
-if isBrookhaven then BrookTab = Window:CreateTab("Brookhaven", 4483362458) end
-if isCaseParadise then CaseTab = Window:CreateTab("Case Paradise", 4483362458) end
+if isBrookhaven then BrookTab = Window:CreateTab("🏠 Brookhaven", 4483362458) end
+if isCaseParadise then CaseTab = Window:CreateTab("📦 Case Paradise", 4483362458) end
 
 -- ========================================
 -- COMBAT (ULEPSZONE Z GITHUB)
 -- ========================================
 CombatTab:CreateToggle({
-   Name = langData.name .. ":ESP",
+   Name = langData.name .. ": 🌈 Rainbow ESP",
    CurrentValue = false,
    Flag = "RainbowESP",
    Callback = function(v)
@@ -78,7 +81,7 @@ CombatTab:CreateToggle({
 
 -- ULTIMATE FLING ALL (Z GITHUB danyad22/Fling + ulepszone)
 CombatTab:CreateToggle({
-   Name = langData.name .. ":Fling All",
+   Name = langData.name .. ": 💥 Ultimate Fling All",
    CurrentValue = false,
    Flag = "UltimateFling",
    Callback = function(enabled)
@@ -109,7 +112,7 @@ CombatTab:CreateToggle({
 })
 
 CombatTab:CreateButton({
-   Name = langData.name .. ":Kill All",
+   Name = langData.name .. ": 🗡️ Kill All (FE)",
    Callback = function()
       for _, p in pairs(Players:GetPlayers()) do
          if p.Character and p.Character:FindFirstChild("Humanoid") then
@@ -204,9 +207,9 @@ MovementTab:CreateSlider({
    Callback = function(v) sliders.flyspeed = v end
 })
 
-MovementTab:CreateToggle({Name="NoClip", CurrentValue=false, Flag="NoClip", Callback=function(v) toggles.noclip=v end})
-MovementTab:CreateToggle({Name="Infinite Jump", CurrentValue=false, Flag="InfJump", Callback=function(v) toggles.infjump=v end})
-MovementTab:CreateToggle({Name="Low Gravity (Fixed)", CurrentValue=false, Flag="LowGravity", Callback=function(v) 
+MovementTab:CreateToggle({Name="👻 NoClip", CurrentValue=false, Flag="NoClip", Callback=function(v) toggles.noclip=v end})
+MovementTab:CreateToggle({Name="∞ Infinite Jump", CurrentValue=false, Flag="InfJump", Callback=function(v) toggles.infjump=v end})
+MovementTab:CreateToggle({Name="🌙 Low Gravity (Fixed)", CurrentValue=false, Flag="LowGravity", Callback=function(v) 
    toggles.lowgrav = v
    spawn(function()
       while toggles.lowgrav do
@@ -221,7 +224,7 @@ end})
 -- VISUALS (ROZSZERZONE)
 -- ========================================
 VisualsTab:CreateSlider({Name="FOV", Range={30,120}, Increment=1, Suffix="°", CurrentValue=70, Flag="FOV", Callback=function(v) sliders.fov=v end})
-VisualsTab:CreateToggle({Name="Fullbright", CurrentValue=false, Flag="Fullbright", Callback=function(v)
+VisualsTab:CreateToggle({Name="💡 Fullbright", CurrentValue=false, Flag="Fullbright", Callback=function(v)
    if v then
       settings().Rendering.QualityLevel = Enum.savedQualitySetting.Powerful
       game.Lighting.Brightness = 3
@@ -232,14 +235,14 @@ VisualsTab:CreateToggle({Name="Fullbright", CurrentValue=false, Flag="Fullbright
    end
 end})
 
-VisualsTab:CreateToggle({Name="Crosshair ESP", CurrentValue=false, Flag="Crosshair", Callback=function(v) toggles.crosshair=v end})
-VisualsTab:CreateButton({Name="Ambient Colors", Callback=function()
+VisualsTab:CreateToggle({Name="🎯 Crosshair ESP", CurrentValue=false, Flag="Crosshair", Callback=function(v) toggles.crosshair=v end})
+VisualsTab:CreateButton({Name="🌈 Ambient Colors", Callback=function()
    game.Lighting.Ambient = Color3.fromRGB(100,100,255)
 end})
 
 -- FPS BOOSTER (Z GitHub Dyshware-la/FPS-Quick)
 VisualsTab:CreateButton({
-   Name = "FPS Booster",
+   Name = "⚡ FPS Booster (GitHub)",
    Callback = function()
       loadstring(game:HttpGet("https://raw.githubusercontent.com/Dyshware-la/FPS-Quick/main/FPS-Booster.lua"))()
       notify("FPS", "Boosted! +100 FPS")
@@ -250,7 +253,7 @@ VisualsTab:CreateButton({
 -- PLAYER (ODdzielone Spectate/Teleport)
 -- ========================================
 PlayerTab:CreateInput({
-   Name = "Spectate Player",
+   Name = "👁️ Spectate Player",
    PlaceholderText = "Nick gracza",
    Callback = function(text)
       local target = Players:FindFirstChild(text)
@@ -262,7 +265,7 @@ PlayerTab:CreateInput({
 })
 
 PlayerTab:CreateInput({
-   Name = "Teleport do gracza",
+   Name = "📍 Teleport do gracza",
    PlaceholderText = "Nick gracza",
    Callback = function(text)
       local target = Players:FindFirstChild(text)
@@ -274,28 +277,28 @@ PlayerTab:CreateInput({
 
 -- SEX TOOL GUI (Z GitHub CatExec NSFW)
 PlayerTab:CreateButton({
-   Name = "Sex Tool",
+   Name = "💋 Sex Tool GUI (18+ GitHub)",
    Callback = function()
       loadstring(game:HttpGet("https://raw.githubusercontent.com/CatExec/Roblox-Scripts/main/%22Bang%22%20NSFW%20Gui.lua"))()
    end
 })
 
-PlayerTab:CreateButton({Name="Infinite Yield", Callback=function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end})
+PlayerTab:CreateButton({Name="🔄 Infinite Yield", Callback=function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end})
 
 -- ========================================
 -- BROOKHAVEN (Pełne skrypty z GitHub)
 -- ========================================
 if BrookTab then
    BrookTab:CreateButton({
-      Name = "Brookhaven Admin",
+      Name = "👑 Brookhaven Admin (GitHub)",
       Callback = function()
          loadstring(game:HttpGet("https://raw.githubusercontent.com/BrookhavenDev/BrookhavenScript/main/admin.lua"))()
       end
    })
-   BrookTab:CreateButton({Name="Unlock All Houses", Callback=function() 
+   BrookTab:CreateButton({Name="🏠 Unlock All Houses", Callback=function() 
       loadstring(game:HttpGet("https://raw.githubusercontent.com/roblox-brookhaven-script/main/houseunlock.lua"))()
    end})
-   BrookTab:CreateButton({Name="Money Hack", Callback=function()
+   BrookTab:CreateButton({Name="💰 Money Hack", Callback=function()
       game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer("/e money 999999", "All")
    end})
 end
@@ -305,12 +308,12 @@ end
 -- ========================================
 if CaseTab then
    CaseTab:CreateButton({
-      Name = "Auto Farm",
+      Name = "🤖 Auto Farm Cases (2026)",
       Callback = function()
          loadstring(game:HttpGet("https://pastefy.app/EIu5EMZl/raw"))()
       end
    })
-   CaseTab:CreateButton({Name="Auto Quest + Sell", Callback=function()
+   CaseTab:CreateButton({Name="⚡ Auto Quest + Sell", Callback=function()
       loadstring(game:HttpGet("https://raw.githubusercontent.com/belkahoney/Case-Paradise/main/Case-Paradise.lua"))()
    end})
 end
@@ -319,7 +322,7 @@ end
 -- USTAWIENIA (Języki + Kolory)
 -- ========================================
 SettingsTab:CreateDropdown({
-   Name = "Język / Language",
+   Name = "🌍 Język / Language",
    Options = {"🇵🇱 Polski", "🇺🇸 English", "🇷🇺 Русский", "🇺🇦 Українська", "🇩🇪 Deutsch"},
    CurrentOption = "🇵🇱 Polski",
    Flag = "LanguageDrop",
@@ -344,7 +347,7 @@ SettingsTab:CreateColorPicker({
    end
 })
 
-SettingsTab:CreateToggle({Name="Anti-AFK", CurrentValue=true, Flag="AntiAFK", Callback=function()
+SettingsTab:CreateToggle({Name="🛡️ Anti-AFK", CurrentValue=true, Flag="AntiAFK", Callback=function()
    local vu = game:GetService("VirtualUser")
    LocalPlayer.Idled:Connect(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end)
 end})
@@ -365,4 +368,4 @@ UserInputService.InputBegan:Connect(function(key)
    end
 end)
 
-notify("✅ Turcja Hub v1.0")
+notify("✅ Turcja Hub v7.0", "Wszystko naprawione! Języki + FPS + Game Scripts!")
