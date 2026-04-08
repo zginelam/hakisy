@@ -1,7 +1,7 @@
 -- Turcja Hub v18.0 | Ultra-safe Rayfield + Full Features | No Errors Guaranteed
 local Rayfield = nil
 local backups = {
-    "https://sirius.menu/rayfield.lua",
+    "https://sirius.menu/rayfield",
     "https://raw.githubusercontent.com/shlexware/Rayfield/main/source",
     "https://raw.githubusercontent.com/RegularVynixu/rayfield/main/source"
 }
