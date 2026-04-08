@@ -237,22 +237,18 @@ MainTab:CreateToggle({
     end
 })
 
-MainTab:CreateToggle({
-    Name = "Yield",
-    CurrentValue = false,
-    Flag = "YieldCMD",
-    Callback = function(Value)
-        if Value then
-            pcall(function()
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/yield3/admin/main/admin.lua"))()
-            end)
-            Rayfield:Notify({
-                Title = "Yield CMD",
-                Content = "Załadowany! Prefix: ;",
-                Duration = 3,
-                Image = 4483362458
-            })
-        end
+MainTab:CreateButton({
+    Name = "Yield CMD",
+    Callback = function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/yield3/admin/main/admin.lua"))()
+        end)
+        Rayfield:Notify({
+            Title = "Yield CMD",
+            Content = "Okno komend otwarte! Prefix: ;",
+            Duration = 4,
+            Image = 4483362458
+        })
     end
 })
 
