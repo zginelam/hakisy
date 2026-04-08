@@ -237,8 +237,27 @@ MainTab:CreateToggle({
     end
 })
 
+MainTab:CreateToggle({
+    Name = "Yield",
+    CurrentValue = false,
+    Flag = "YieldCMD",
+    Callback = function(Value)
+        if Value then
+            pcall(function()
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/yield3/admin/main/admin.lua"))()
+            end)
+            Rayfield:Notify({
+                Title = "Yield CMD",
+                Content = "Załadowany! Prefix: ;",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end
+})
+
 MainTab:CreateButton({
-    Name = "🔓 Unlock All (Drzwi/Bramy)",
+    Name = "Unlock All (Drzwi/Bramy)",
     Callback = function()
         local count = 0
         for _, obj in ipairs(Workspace:GetDescendants()) do
@@ -258,7 +277,7 @@ MainTab:CreateButton({
 
 -- PLAYERS TAB (FULLY FIXED)
 PlayersTab:CreateButton({
-    Name = "🔄 Odśwież graczy",
+    Name = "Odśwież graczy",
     Callback = function()
         playerNames = getPlayerNames()
         Rayfield:Notify({
@@ -270,7 +289,7 @@ PlayersTab:CreateButton({
 })
 
 local tpDropdown = PlayersTab:CreateDropdown({
-    Name = "👤 Gracz TP",
+    Name = "Gracz TP",
     Options = playerNames,
     CurrentOption = "Wybierz...",
     Flag = "TPPlayer",
@@ -280,7 +299,7 @@ local tpDropdown = PlayersTab:CreateDropdown({
 })
 
 PlayersTab:CreateButton({
-    Name = "⚡ TP do gracza",
+    Name = "TP do gracza",
     Callback = function()
         if not selectedPlayerName or selectedPlayerName == "Wybierz..." then
             Rayfield:Notify({
@@ -314,7 +333,7 @@ PlayersTab:CreateButton({
 })
 
 local spectateDropdown = PlayersTab:CreateDropdown({
-    Name = "👁️ Spectate",
+    Name = "Spectate",
     Options = playerNames,
     CurrentOption = "Wybierz...",
     Flag = "SpectatePlayer",
