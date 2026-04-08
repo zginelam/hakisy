@@ -238,14 +238,12 @@ MainTab:CreateToggle({
 })
 
 MainTab:CreateButton({
-    Name = "Yield CMD",
+    Name = "🎛️ Infinite Yield Admin",
     Callback = function()
-        pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/yield3/admin/main/admin.lua"))()
-        end)
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
         Rayfield:Notify({
-            Title = "Yield CMD",
-            Content = "Okno komend otwarte! Prefix: ;",
+            Title = "✅ Infinite Yield",
+            Content = "GUI otwarte w rogu ekranu! (F6)",
             Duration = 4,
             Image = 4483362458
         })
