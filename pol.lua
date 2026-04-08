@@ -1,7 +1,7 @@
 -- Turcja Hub v19.0 | PROFESSIONAL | ALL FIXED + NEW FEATURES
 local success, Rayfield = pcall(function()
     local urls = {
-        "https://sirius.menu/rayfield.lua",
+        "https://sirius.menu/rayfield",
         "https://raw.githubusercontent.com/shlexware/Rayfield/main/source",
         "https://raw.githubusercontent.com/RegularVynixu/rayfield/main/source"
     }
