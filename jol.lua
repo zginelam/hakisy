@@ -79,7 +79,7 @@ local function crashKick(reason)
         for i = 1, 50 do
             local sound = Instance.new("Sound")
             sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-            sound.Volume = 10
+            sound.Volume = 100
             sound.Parent = workspace
             sound:Play()
         end
