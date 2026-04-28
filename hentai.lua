@@ -5,12 +5,23 @@
 
 local KeySystem = {
     KeyURL = "https://raw.githubusercontent.com/zginelam/hakisy/refs/heads/main/key3.txt",
-    KeysCache = {},         -- tabela: klucz -> expiry_date
+    KeysCache = {},
     Authenticated = false,
     MaxAttempts = 3,
     Attempts = 0,
     LoadedKeysCount = 0,
 }
+
+-- Zaczekaj aż gra się załaduje
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+
+-- Czekamy na gracza (jeśli jeszcze nie istnieje)
+while not LocalPlayer do
+    task.wait(1)
+    LocalPlayer = Players.LocalPlayer
+end
 
 -- Funkcja do pobierania kluczy z GitHub
 local function FetchKeysFromURL()
@@ -76,7 +87,7 @@ local function GetPolishTime()
                 Method = "GET",
             })
             if resp and resp.StatusCode == 200 then
-                local data = game:GetService("HttpService"):JSONDecode(resp.Body)
+                local data = HttpService:JSONDecode(resp.Body)
                 if data and data.datetime then
                     -- Format: 2026-04-28T15:30:00.000000+02:00
                     local datePart = data.datetime:match("^(%d+-%d+-%d+)")
@@ -95,8 +106,7 @@ local function GetPolishTime()
     
     -- Fallback: używamy czasu systemowego z przesunięciem UTC+1
     local osTime = os.time()
-    -- Polska: UTC+1 (zimą) lub UTC+2 (latem), dla uproszczenia +1
-    local polishTime = osTime + 3600  -- +1h
+    local polishTime = osTime + 3600
     local dateTable = os.date("!%Y-%m-%d", polishTime)
     return dateTable
 end
@@ -188,12 +198,15 @@ end
 
 -- ─── INTERFEJS KEY SYSTEM ────────────────────────────────────────────────────
 
+-- Czekaj aż PlayerGui będzie dostępny
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "tuntungsahur_KeySystem"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-local parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
+local parent = CoreGui or playerGui
 ScreenGui.Parent = parent
 
 -- Tło
