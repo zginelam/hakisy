@@ -97,4 +97,4 @@ klucz_DDDD0006|2036-04-28
 klucz_DDDD0007|2036-04-28
 klucz_DDDD0008|2036-04-28
 klucz_DDDD0009|2036-04-28
-klucz_ZZZZ0001|never
+turcja|never
