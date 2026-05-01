@@ -3540,6 +3540,4 @@ Players.PlayerRemoving:Connect(function(p)
     end
 end)
 
-notify("One Scope", "🔥 [FPS] One Scope loaded — all " .. #Tab:GetSections() .. "
-
 print("Tung Tung Sahur loaded successfully!")
