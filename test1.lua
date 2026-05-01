@@ -2457,8 +2457,6 @@ LocalPlayer.OnTeleport:Connect(function(state)
     StopFloat()
 end)
 
-print("Tung Tung Sahur loaded successfully!")
-
 local OS_PLACEID = 135648408848758
 local IS_ONE_SCOPE = (game.PlaceId == OS_PLACEID)
 
@@ -3215,3 +3213,5 @@ if IS_ONE_SCOPE then
     end)
     
 end -- koniec IS_ONE_SCOPE
+
+print("Tung Tung Sahur loaded successfully!")
