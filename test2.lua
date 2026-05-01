@@ -2457,761 +2457,1089 @@ LocalPlayer.OnTeleport:Connect(function(state)
     StopFloat()
 end)
 
-local OS_PLACEID = 135648408848758
-local IS_ONE_SCOPE = (game.PlaceId == OS_PLACEID)
+-- ======================================================================
+-- [FPS] ONE SCOPE — ADVANCED MODULE v2.0
+-- PlaceId: 135648408848758 (automatyczne wykrywanie)
+-- Wklej na KONIEC skryptu (za print i za Prison Life)
+-- ======================================================================
 
-if IS_ONE_SCOPE then
-    
-    -- pobierz globalne zmienne z głównego skryptu
-    local OSPlayers = game:GetService("Players")
-    local OSRunService = game:GetService("RunService")
-    local OSUserInputService = game:GetService("UserInputService")
-    local OSLighting = game:GetService("Lighting")
-    local OSWorkspace = game:GetService("Workspace")
-    local OSReplicatedStorage = game:GetService("ReplicatedStorage")
-    local OSHttpService = game:GetService("HttpService")
-    local OSVirtualUser = game:GetService("VirtualUser")
-    
-    local OSLocalPlayer = OSPlayers.LocalPlayer
-    local OSCharacter = OSLocalPlayer.Character or OSLocalPlayer.CharacterAdded:Wait()
-    local OSHumanoid = OSCharacter:WaitForChild("Humanoid")
-    local OSRootPart = OSCharacter:WaitForChild("HumanoidRootPart")
-    
-    -- helpery
-    local function OSGetChar(p) return p.Character end
-    local function OSGetRoot(p) local c = OSGetChar(p); return c and c:FindFirstChild("HumanoidRootPart") end
-    local function OSGetHum(p) local c = OSGetChar(p); return c and c:FindFirstChildOfClass("Humanoid") end
-    local function OSGetPlayerFromChar(char)
-        for _, p in ipairs(OSPlayers:GetPlayers()) do if p.Character == char then return p end end
+if game.PlaceId ~= 135648408848758 then return end
+
+-- ===== SERVICES =====
+local Players = game:GetService("Players")
+local RunSvc = game:GetService("RunService")
+local UserInput = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpSvc = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
+local TweenSvc = game:GetService("TweenService")
+local Stats = game:GetService("Stats")
+local VirtualUser = game:GetService("VirtualUser")
+local TeleportSvc = game:GetService("TeleportService")
+
+local LP = Players.LocalPlayer
+local function char() return LP.Character or LP.CharacterAdded:Wait() end
+local function root() local c = char(); return c and c:FindFirstChild("HumanoidRootPart") end
+local function hum() local c = char(); return c and c:FindFirstChildOfClass("Humanoid") end
+local cam = Workspace.CurrentCamera
+
+local function getPlrFromChar(c)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character == c then return p end
+    end
+end
+local function getRoot(p) local c = p.Character; return c and c:FindFirstChild("HumanoidRootPart") end
+local function getHum(p) local c = p.Character; return c and c:FindFirstChildOfClass("Humanoid") end
+local function getAlive()
+    local t = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then local h = getHum(p); if h and h.Health > 0 then table.insert(t, p) end end
+    end
+    return t
+end
+
+local function notify(t, c, d)
+    pcall(function()
+        if Rayfield and Rayfield.Notify then
+            Rayfield:Notify({Title = t or "One Scope", Content = c or "", Duration = d or 5, Image = 4483362458})
+        end
+    end)
+end
+
+-- ======================================================================
+-- KONFIGURACJA
+-- ======================================================================
+local Cfg = {
+    SilentAim = false, SilentAimPriority = "Head",
+    Aimbot = false, AimbotSmooth = 0.35, AimbotFOV = 200, AimbotPredict = false,
+    Triggerbot = false, TriggerbotDelay = 0.05,
+    ESP = false, ESPBox = true, ESPBoxOutline = true, ESPTracers = true, ESPName = true,
+    ESPHealth = true, ESPDistance = false, ESPChams = false,
+    ESPColor = Color3.fromRGB(255, 50, 50), ESPRainbow = false, ESPRainbowSpeed = 1,
+    TracersRainbow = false,
+    FovCircle = false, FovCircleColor = Color3.fromRGB(0, 255, 100),
+    FovCircleRainbow = false, FovCircleSize = 150,
+    FovCircleThick = 2, FovCircleTrans = 0.5,
+    HitboxExpand = false, HitboxSize = 4,
+    Fly = false, FlySpeed = 50, FlyAccel = 2,
+    Noclip = false, InfJump = false,
+    Wallhack = false, WallhackTrans = 0.55,
+    FOVChanger = false, FOVValue = 120,
+    NoRecoil = false, NoSpread = false,
+    Bypass = false, BypassAll = false,
+    KillAll = false, KillAllActive = false,
+}
+
+-- ======================================================================
+-- ZAAWANSOWANY SILENT AIM (hookowanie __namecall)
+-- ======================================================================
+local silentHooks = {}
+do
+    local mt = getrawmetatable and getrawmetatable(game)
+    if mt then
+        local __namecall = mt.__namecall
+        local __index = mt.__index
+        setreadonly(mt, false)
+
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            local args = {...}
+            
+            if Cfg.SilentAim and (method == "FireServer") then
+                local target = getClosestPlayerToCursor()
+                if target and self and self.Name then
+                    local n = self.Name:lower()
+                    -- Automatyczna detekcja remote'ów strzelania
+                    if (n:find("fire") or n:find("shoot") or n:find("bullet") or n:find("hit") or n:find("damage") or n:find("ray") or n:find("projectile")) then
+                        local tr = getRoot(target)
+                        if tr then
+                            -- podmiana arg — cel w głowę lub root
+                            local head = target.Character and target.Character:FindFirstChild("Head")
+                            local aimPos = (Cfg.SilentAimPriority == "Head" and head and head.Position) or tr.Position
+                            if Cfg.AimbotPredict and Cfg.Aimbot then
+                                local hum2 = getHum(target)
+                                if hum2 and hum2.RootPart then
+                                    local vel = hum2.RootPart.Velocity
+                                    local dist = (cam.CFrame.Position - tr.Position).Magnitude
+                                    local travelTime = dist / 2000
+                                    aimPos = aimPos + vel * travelTime
+                                end
+                            end
+                            -- podmiana argumentów
+                            for i = 1, #args do
+                                if typeof(args[i]) == "Vector3" then args[i] = aimPos end
+                                if typeof(args[i]) == "CFrame" then args[i] = CFrame.new(aimPos) end
+                                if typeof(args[i]) == "Instance" and args[i]:IsA("BasePart") then
+                                    args[i] = head or tr
+                                end
+                            end
+                            return __namecall(self, unpack(args))
+                        end
+                    end
+                end
+            end
+            
+            if Cfg.Triggerbot and (method == "FireServer") then
+                local mouse = LP:GetMouse()
+                local targetPart = mouse.Target
+                if targetPart then
+                    local plr = getPlrFromChar(targetPart.Parent)
+                    if not plr and targetPart.Parent and targetPart.Parent.Parent then
+                        plr = getPlrFromChar(targetPart.Parent.Parent)
+                    end
+                    if plr and plr ~= LP then
+                        return __namecall(self, ...)
+                    end
+                end
+            end
+            
+            -- Bypass: blokuj remotedetect/anticheat
+            if Cfg.Bypass and (method == "FireServer" or method == "InvokeServer") then
+                local n = self and self.Name and self.Name:lower() or ""
+                if n:find("anticheat") or n:find("antihack") or n:find("detect") or n:find("kick") or n:find("ban") or n:find("report") or n:find("flag") then
+                    return
+                end
+            end
+            
+            return __namecall(self, ...)
+        end)
+
+        mt.__index = newcclosure(function(self, k)
+            if Cfg.Bypass and type(k) == "string" then
+                local kl = k:lower()
+                if kl:find("walkspeed") or kl:find("jumppower") or kl:find("hipheight") then
+                    -- blokada odczytu przez anti-cheat (zawsze zwracaj normalnie)
+                end
+            end
+            if Cfg.HitboxExpand and type(k) == "string" and k:lower():find("size") then
+                -- pozwalamy na normalny odczyt
+            end
+            return __index(self, k)
+        end)
+
+        setreadonly(mt, true)
+    end
+end
+
+-- ======================================================================
+-- HELPER: closest player to cursor
+-- ======================================================================
+function getClosestPlayerToCursor()
+    local mouse = LP:GetMouse()
+    local closest, closestDist = nil, Cfg.AimbotFOV
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LP then continue end
+        local r = getRoot(p)
+        local h = getHum(p)
+        if r and h and h.Health > 0 then
+            local pos, onScreen = cam:WorldToViewportPoint(r.Position)
+            if onScreen then
+                local d = (Vector2.new(pos.X, pos.Y) - Vector2.new(mouse.X, mouse.Y)).Magnitude
+                if d < closestDist then closestDist = d; closest = p end
+            end
+        end
+    end
+    return closest
+end
+
+-- ======================================================================
+-- ESP z Drawing (zaawansowany)
+-- ======================================================================
+local espDrawings = {}
+local espRainbowHue = 0
+local espRunning = false
+
+local function clearESP()
+    for _, d in pairs(espDrawings) do
+        for _, obj in pairs(d) do
+            pcall(function() obj:Remove() end)
+        end
+    end
+    espDrawings = {}
+end
+
+local function createESPDrawing(p)
+    if espDrawings[p] then return end
+    espDrawings[p] = {
+        Box = Drawing.new("Square"),
+        BoxOutline = Drawing.new("Square"),
+        Name = Drawing.new("Text"),
+        Tracer = Drawing.new("Line"),
+        HealthBg = Drawing.new("Square"),
+        HealthBar = Drawing.new("Square"),
+        Distance = Drawing.new("Text"),
+        Chams = nil,
+    }
+    local d = espDrawings[p]
+    d.Box.Thickness = 2; d.Box.Filled = false; d.Box.Transparency = 1
+    d.BoxOutline.Thickness = 3; d.BoxOutline.Filled = false; d.BoxOutline.Transparency = 1; d.BoxOutline.Color = Color3.new(0,0,0)
+    d.Name.Size = 15; d.Name.Center = true; d.Name.Outline = true; d.Name.OutlineColor = Color3.new(0,0,0)
+    d.Tracer.Thickness = 1.5; d.Tracer.Transparency = 1
+    d.HealthBg.Thickness = 1; d.HealthBg.Filled = true; d.HealthBg.Transparency = 0.85; d.HealthBg.Color = Color3.fromRGB(20,20,20)
+    d.HealthBar.Thickness = 0; d.HealthBar.Filled = true; d.HealthBar.Transparency = 0.8
+    d.Distance.Size = 12; d.Distance.Center = true; d.Distance.Outline = true; d.Distance.OutlineColor = Color3.new(0,0,0)
+end
+
+local function updateESP()
+    if not Cfg.ESP then
+        for _, d in pairs(espDrawings) do
+            for _, obj in pairs(d) do pcall(function() obj.Visible = false end) end
+        end
+        return
     end
     
-    -- Notyfikacje
-    local function OSNotify(title, content, dur)
+    if Cfg.ESPRainbow or Cfg.TracersRainbow then
+        espRainbowHue = (espRainbowHue + Cfg.ESPRainbowSpeed) % 360
+    end
+    
+    local scale = cam.ViewportSize
+    
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LP then continue end
+        local r = getRoot(p)
+        local h = getHum(p)
+        if not r or not h or h.Health <= 0 then
+            if espDrawings[p] then
+                for _, obj in pairs(espDrawings[p]) do pcall(function() obj.Visible = false end) end
+            end
+            continue
+        end
+        
+        createESPDrawing(p)
+        local d = espDrawings[p]
+        local pos, onScreen = cam:WorldToViewportPoint(r.Position + Vector3.new(0, 3, 0))
+        local dist = (cam.CFrame.Position - r.Position).Magnitude
+        local boxH = math.clamp(600/dist * 3.5, 30, 300)
+        local boxW = boxH * 0.7
+        
+        local espColor
+        if Cfg.ESPRainbow then
+            espColor = Color3.fromHSV(espRainbowHue/360, 1, 1)
+        else
+            espColor = Cfg.ESPColor
+        end
+        
+        local tracerColor
+        if Cfg.TracersRainbow then
+            tracerColor = Color3.fromHSV((espRainbowHue + 60)/360 % 1, 1, 1)
+        else
+            tracerColor = espColor
+        end
+        
+        local x, y = pos.X, pos.Y
+        
+        -- BOX
+        d.Box.Visible = Cfg.ESPBox and onScreen
+        d.Box.Position = Vector2.new(x - boxW/2, y - boxH)
+        d.Box.Size = Vector2.new(boxW, boxH)
+        d.Box.Color = espColor
+        
+        d.BoxOutline.Visible = Cfg.ESPBoxOutline and Cfg.ESPBox and onScreen
+        d.BoxOutline.Position = Vector2.new(x - boxW/2 - 1, y - boxH - 1)
+        d.BoxOutline.Size = Vector2.new(boxW + 2, boxH + 2)
+        
+        -- NAME
+        d.Name.Visible = Cfg.ESPName and onScreen
+        d.Name.Position = Vector2.new(x, y - boxH - 18)
+        d.Name.Text = p.Name
+        d.Name.Color = espColor
+        
+        -- TRACER
+        d.Tracer.Visible = Cfg.ESPTracers and onScreen
+        d.Tracer.From = Vector2.new(scale.X/2, scale.Y)
+        d.Tracer.To = Vector2.new(x, y)
+        d.Tracer.Color = tracerColor
+        
+        -- HEALTH BAR
+        if Cfg.ESPHealth and onScreen then
+            local hp = math.clamp(h.Health/h.MaxHealth, 0, 1)
+            local hpColor = Color3.fromHSV(hp * 0.35, 1, 1)
+            d.HealthBg.Visible = true
+            d.HealthBg.Position = Vector2.new(x + boxW/2 + 4, y - boxH)
+            d.HealthBg.Size = Vector2.new(6, boxH)
+            d.HealthBar.Visible = true
+            d.HealthBar.Color = hpColor
+            d.HealthBar.Position = Vector2.new(x + boxW/2 + 4, y - boxH + boxH * (1 - hp))
+            d.HealthBar.Size = Vector2.new(6, boxH * hp)
+        else
+            d.HealthBg.Visible = false; d.HealthBar.Visible = false
+        end
+        
+        -- DISTANCE
+        d.Distance.Visible = Cfg.ESPDistance and onScreen
+        d.Distance.Position = Vector2.new(x, y + boxH + 4)
+        d.Distance.Text = math.floor(dist) .. " studs"
+        d.Distance.Color = espColor
+    end
+end
+
+-- ======================================================================
+-- FOV CIRCLE
+-- ======================================================================
+local fovCircle = Drawing.new("Circle")
+fovCircle.Visible = false; fovCircle.Thickness = 2; fovCircle.NumSides = 72
+fovCircle.Radius = 150; fovCircle.Transparency = 0.5; fovCircle.Color = Color3.fromRGB(0, 255, 100)
+local fovRainbowHue = 0
+
+local function updateFovCircle()
+    if not Cfg.FovCircle then fovCircle.Visible = false; return end
+    local mouse = LP:GetMouse()
+    fovCircle.Visible = true
+    fovCircle.Position = Vector2.new(mouse.X, mouse.Y)
+    fovCircle.Radius = Cfg.FovCircleSize
+    fovCircle.Thickness = Cfg.FovCircleThick
+    fovCircle.Transparency = Cfg.FovCircleTrans
+    if Cfg.FovCircleRainbow then
+        fovRainbowHue = (fovRainbowHue + 1.5) % 360
+        fovCircle.Color = Color3.fromHSV(fovRainbowHue/360, 1, 1)
+    else
+        fovCircle.Color = Cfg.FovCircleColor
+    end
+end
+
+-- ======================================================================
+-- AIMBOT LOOP
+-- ======================================================================
+local function aimbotLoop()
+    while Cfg.Aimbot do
+        task.wait()
         pcall(function()
-            if Rayfield and Rayfield.Notify then
-                Rayfield:Notify({Title = title, Content = content, Duration = dur or 6.5, Image = 4483362458})
+            local target = getClosestPlayerToCursor()
+            if target then
+                local r = getRoot(target)
+                if r then
+                    local targetCF = CFrame.new(cam.CFrame.Position, r.Position)
+                    cam.CFrame = cam.CFrame:Lerp(targetCF, Cfg.AimbotSmooth)
+                end
             end
         end)
     end
-    
-    -- ======================================================================
-    -- ZMIENNE GLOBALNE MODUŁU
-    -- ======================================================================
-    local OSModule = {
-        SilentAim = false,
-        Aimbot = false,
-        Triggerbot = false,
-        ESP = false,
-        ESPBox = true,
-        ESPTracers = true,
-        ESPHealth = true,
-        ESPName = true,
-        ESPDistance = false,
-        ESPColor = Color3.fromRGB(255, 50, 50),
-        ESPRainbow = false,
-        TracersRainbow = false,
-        FovCircle = false,
-        FovCircleColor = Color3.fromRGB(0, 255, 100),
-        FovCircleRainbow = false,
-        FovCircleSize = 150,
-        FovCircleThickness = 2,
-        FovCircleTransparency = 0.6,
-        HitboxExpander = false,
-        HitboxSize = 5,
-        Fly = false,
-        FlySpeed = 50,
-        Wallhack = false,
-        Noclip = false,
-        InfiniteJump = false,
-        NoRecoil = false,
-        NoSpread = false,
-        FOVChange = false,
-        FOVValue = 120,
-        BypassAntiCheat = false,
-        AimlockSmoothness = 0.3,
-        AimFOV = 200,
-    }
-    
-    local OSConns = {}
-    local OSDrawings = {}
-    local OSActive = {}
-    
-    -- ======================================================================
-    -- FOV CIRCLE
-    -- ======================================================================
-    local OSFovCircle = Drawing.new("Circle")
-    OSFovCircle.Visible = false
-    OSFovCircle.Thickness = 2
-    OSFovCircle.NumSides = 64
-    OSFovCircle.Radius = 150
-    OSFovCircle.Transparency = 0.6
-    OSFovCircle.Color = Color3.fromRGB(0, 255, 100)
-    OSFovCircle.Position = Vector2.new(0, 0)
-    
-    local rainbowHue = 0
-    
-    local function UpdateFovCircle()
-        if not OSModule.FovCircle then
-            OSFovCircle.Visible = false
-            return
-        end
-        local mouse = OSLocalPlayer:GetMouse()
-        local cam = OSWorkspace.CurrentCamera
-        OSFovCircle.Visible = true
-        OSFovCircle.Position = Vector2.new(mouse.X, mouse.Y)
-        OSFovCircle.Radius = OSModule.FovCircleSize
-        OSFovCircle.Thickness = OSModule.FovCircleThickness
-        OSFovCircle.Transparency = OSModule.FovCircleTransparency
-        
-        if OSModule.FovCircleRainbow then
-            rainbowHue = (rainbowHue + 0.5) % 360
-            OSFovCircle.Color = Color3.fromHSV(rainbowHue/360, 1, 1)
-        else
-            OSFovCircle.Color = OSModule.FovCircleColor
-        end
-    end
-    
-    local function FovCircleLoop()
-        while OSModule.FovCircle do
-            task.wait(0.03)
-            pcall(UpdateFovCircle)
-        end
-        OSFovCircle.Visible = false
-    end
-    
-    -- ======================================================================
-    -- ESP (z rainbow support)
-    -- ======================================================================
-    local OSEspDrawings = {}
-    local OSEspRainbowHue = 0
-    
-    local function OSClearESP()
-        for _, d in pairs(OSEspDrawings) do
-            if type(d) == "table" then
-                for _, v in pairs(d) do pcall(function() v:Remove() end) end
-            else pcall(function() d:Remove() end) end
-        end
-        OSEspDrawings = {}
-    end
-    
-    local function OSUpdateESP()
-        if not OSModule.ESP then
-            for _, d in pairs(OSEspDrawings) do
-                if type(d) == "table" then for _, v in pairs(d) do pcall(function() v.Visible = false end) end end
+end
+
+-- ======================================================================
+-- TRIGGERBOT LOOP
+-- ======================================================================
+local function triggerbotLoop()
+    while Cfg.Triggerbot do
+        task.wait(Cfg.TriggerbotDelay)
+        pcall(function()
+            local mouse = LP:GetMouse()
+            local target = mouse.Target
+            if not target then return end
+            local plr = getPlrFromChar(target.Parent)
+            if not plr and target.Parent and target.Parent.Parent then
+                plr = getPlrFromChar(target.Parent.Parent)
             end
-            return
-        end
-        
-        local cam = OSWorkspace.CurrentCamera
-        
-        if OSModule.ESPRainbow then
-            OSEspRainbowHue = (OSEspRainbowHue + 0.3) % 360
-        end
-        
-        for _, player in ipairs(OSPlayers:GetPlayers()) do
-            if player == OSLocalPlayer then continue end
-            local root = OSGetRoot(player)
-            local hum = OSGetHum(player)
-            if not root or not hum or hum.Health <= 0 then
-                if OSEspDrawings[player] then
-                    for _, d in pairs(OSEspDrawings[player]) do
-                        if type(d) == "table" then for _, v in pairs(d) do pcall(function() v.Visible = false end) end
-                        else pcall(function() d.Visible = false end) end
+            if plr and plr ~= LP then
+                local tool = char():FindFirstChildOfClass("Tool")
+                if tool then
+                    local rem = tool:FindFirstChildWhichIsA("RemoteEvent") or tool:FindFirstChild("Fire") or tool:FindFirstChild("Shoot")
+                    if rem then
+                        pcall(function() rem:FireServer() end)
                     end
                 end
-                continue
-            end
-            
-            if not OSEspDrawings[player] then
-                OSEspDrawings[player] = {
-                    box = Drawing.new("Square"),
-                    name = Drawing.new("Text"),
-                    tracer = Drawing.new("Line"),
-                    hp = {Bar = Drawing.new("Square"), Bg = Drawing.new("Square")},
-                    dist = Drawing.new("Text"),
-                }
-                local d = OSEspDrawings[player]
-                d.box.Thickness = 2; d.box.Filled = false; d.box.Transparency = 1
-                d.name.Size = 16; d.name.Center = true; d.name.Outline = true; d.name.OutlineColor = Color3.new(0,0,0)
-                d.tracer.Thickness = 1.5; d.tracer.Transparency = 1
-                d.hp.Bar.Thickness = 1; d.hp.Bar.Filled = true; d.hp.Bar.Transparency = 0.8
-                d.hp.Bg.Thickness = 1; d.hp.Bg.Filled = true; d.hp.Bg.Transparency = 0.9; d.hp.Bg.Color = Color3.fromRGB(30,30,30)
-                d.dist.Size = 13; d.dist.Center = true; d.dist.Outline = true; d.dist.OutlineColor = Color3.new(0,0,0)
-            end
-            
-            local pos, onScreen = cam:WorldToViewportPoint(root.Position)
-            local scale = cam.ViewportSize
-            local dist = (cam.CFrame.Position - root.Position).Magnitude
-            local bs = math.clamp(500/dist*4, 20, 200)
-            local hs = bs/2
-            local d = OSEspDrawings[player]
-            
-            -- kolor ESP
-            local espColor
-            if OSModule.ESPRainbow then
-                espColor = Color3.fromHSV(OSEspRainbowHue/360, 1, 1)
-            else
-                espColor = OSModule.ESPColor
-            end
-            
-            -- kolor tracerów
-            local tracerColor
-            if OSModule.TracersRainbow then
-                tracerColor = Color3.fromHSV((OSEspRainbowHue + 60)/360 % 1, 1, 1)
-            else
-                tracerColor = espColor
-            end
-            
-            d.box.Visible = OSModule.ESPBox and onScreen
-            d.box.Position = Vector2.new(pos.X-hs, pos.Y-bs)
-            d.box.Size = Vector2.new(bs, bs*1.6)
-            d.box.Color = espColor
-            
-            d.name.Visible = OSModule.ESPName and onScreen
-            d.name.Position = Vector2.new(pos.X, pos.Y-bs*1.6-16)
-            d.name.Text = player.Name .. " [" .. math.floor(hum.Health) .. "HP]"
-            d.name.Color = espColor
-            
-            d.tracer.Visible = OSModule.ESPTracers and onScreen
-            d.tracer.From = Vector2.new(scale.X/2, scale.Y)
-            d.tracer.To = Vector2.new(pos.X, pos.Y)
-            d.tracer.Color = tracerColor
-            
-            if OSModule.ESPHealth and onScreen then
-                local hpP = hum.Health/hum.MaxHealth
-                local hc = Color3.fromRGB(math.floor(255*(1-hpP)), math.floor(255*hpP), 50)
-                d.hp.Bg.Visible = true; d.hp.Bg.Position = Vector2.new(pos.X+hs+3, pos.Y-bs); d.hp.Bg.Size = Vector2.new(6, bs*1.6)
-                d.hp.Bar.Visible = true; d.hp.Bar.Color = hc
-                d.hp.Bar.Position = Vector2.new(pos.X+hs+3, pos.Y-bs+(bs*1.6*(1-hpP))); d.hp.Bar.Size = Vector2.new(6, bs*1.6*hpP)
-            else d.hp.Bar.Visible = false; d.hp.Bg.Visible = false end
-            
-            d.dist.Visible = OSModule.ESPDistance and onScreen
-            d.dist.Position = Vector2.new(pos.X, pos.Y-bs*1.6+16)
-            d.dist.Text = math.floor(dist).." studs"
-            d.dist.Color = espColor
-        end
-    end
-    
-    -- ======================================================================
-    -- SILENT AIM / AIMBOT / TRIGGERBOT
-    -- ======================================================================
-    local function OSFindClosestPlayerToMouse()
-        local mouse = OSLocalPlayer:GetMouse()
-        local cam = OSWorkspace.CurrentCamera
-        local closest, closestDist = nil, OSModule.AimFOV
-        
-        for _, player in ipairs(OSPlayers:GetPlayers()) do
-            if player == OSLocalPlayer then continue end
-            local root = OSGetRoot(player)
-            local hum = OSGetHum(player)
-            if root and hum and hum.Health > 0 then
-                local pos, onScreen = cam:WorldToViewportPoint(root.Position)
-                if onScreen then
-                    local screenPoint = Vector2.new(pos.X, pos.Y)
-                    local mousePoint = Vector2.new(mouse.X, mouse.Y)
-                    local d = (screenPoint - mousePoint).Magnitude
-                    if d < closestDist then
-                        closestDist = d
-                        closest = player
-                    end
-                end
-            end
-        end
-        return closest
-    end
-    
-    local function OSAimbotLoop()
-        while OSModule.Aimbot do
-            task.wait()
-            pcall(function()
-                local target = OSFindClosestPlayerToMouse()
-                if target then
-                    local root = OSGetRoot(target)
-                    if root then
-                        local cam = OSWorkspace.CurrentCamera
-                        local smooth = OSModule.AimlockSmoothness
-                        local targetCF = CFrame.new(cam.CFrame.Position, root.Position)
-                        cam.CFrame = cam.CFrame:Lerp(targetCF, smooth, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-                    end
-                end
-            end)
-        end
-    end
-    
-    local function OSSilentAimHook()
-        -- silent aim - hookowanie narzędzi
-        if OSModule.SilentAim then
-            for _, tool in ipairs(OSCharacter:GetChildren()) do
-                if tool:IsA("Tool") then
-                    local fireRemote = tool:FindFirstChild("RemoteEvent") or tool:FindFirstChild("Fire") or tool:FindFirstChild("Shoot")
-                    local hitbox = tool:FindFirstChild("Handle") or tool:FindFirstChild("Hitbox")
-                    
-                    -- znajdź najbliższego gracza i ustaw celowanie
-                    local target = OSFindClosestPlayerToMouse()
-                    if target and fireRemote then
-                        local targetRoot = OSGetRoot(target)
-                        if targetRoot then
-                            -- symuluj strzał w głowę
-                            fireRemote:FireServer(targetRoot.Position, targetRoot)
+                -- backup: szukaj w ReplicatedStorage
+                for _, v in ipairs(ReplicatedStorage:GetDescendants()) do
+                    if v:IsA("RemoteEvent") then
+                        local n = v.Name:lower()
+                        if n:find("click") or n:find("fire") or n:find("shoot") or n:find("gun") then
+                            pcall(function() v:FireServer() end)
+                            break
                         end
                     end
                 end
             end
-        end
+        end)
     end
-    
-    local function OSTriggerbotLoop()
-        while OSModule.Triggerbot do
-            task.wait(0.05)
-            pcall(function()
-                local mouse = OSLocalPlayer:GetMouse()
-                local target = mouse.Target
-                if target then
-                    local player = OSGetPlayerFromChar(target.Parent)
-                    if not player then
-                        -- sprawdź czy to część gracza
-                        if target.Parent and target.Parent.Parent then
-                            player = OSGetPlayerFromChar(target.Parent.Parent)
-                        end
-                    end
-                    if player and player ~= OSLocalPlayer then
-                        local tool = OSCharacter:FindFirstChildOfClass("Tool")
-                        if tool then
-                            local remote = tool:FindFirstChild("RemoteEvent") or tool:FindFirstChild("Fire") or tool:FindFirstChild("Shoot")
-                            if remote then remote:FireServer() end
-                            -- backup: szukaj w ReplicatedStorage
-                            local clickRemote = OSReplicatedStorage:FindFirstChild("WeaponClick") or OSReplicatedStorage:FindFirstChild("GunClick")
-                            if clickRemote then clickRemote:FireServer() end
-                        end
-                    end
-                end
-            end)
-        end
-    end
-    
-    -- ======================================================================
-    -- HITBOX EXPANDER
-    -- ======================================================================
-    local function OSHitboxLoop()
-        while OSModule.HitboxExpander do
-            task.wait(0.1)
-            pcall(function()
-                local size = OSModule.HitboxSize
-                for _, player in ipairs(OSPlayers:GetPlayers()) do
-                    if player == OSLocalPlayer then continue end
-                    local char = OSGetChar(player)
-                    if char then
-                        for _, part in ipairs(char:GetChildren()) do
-                            if part:IsA("BasePart") and part.Name:lower():find("head") then
-                                part.Size = Vector3.new(size, size, size)
-                            elseif part:IsA("BasePart") and (part.Name:lower():find("torso") or part.Name:lower():find("body") or part.Name:lower():find("humanoid")) then
-                                part.Size = Vector3.new(size*1.5, size*1.5, size*1.5)
+end
+
+-- ======================================================================
+-- HITBOX EXPANDER (bez bugów)
+-- ======================================================================
+local function hitboxLoop()
+    while Cfg.HitboxExpand do
+        task.wait(0.1)
+        pcall(function()
+            local s = Cfg.HitboxSize
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p == LP then continue end
+                local c = p.Character
+                if c then
+                    for _, part in ipairs(c:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            local n = part.Name:lower()
+                            if n == "head" then
+                                part.Size = Vector3.new(s, s*0.6, s)
+                                part.CanCollide = false
+                                part.Transparency = 0.85
+                            elseif n:find("torso") or n == "upperbody" or n == "lowerbody" or n == "humanoidrootpart" then
+                                part.Size = Vector3.new(s*1.3, s*1.3, s*1.1)
+                                part.CanCollide = false
+                                part.Transparency = 0.85
+                            elseif n:find("arm") or n:find("leg") or n:find("hand") or n:find("foot") then
+                                part.Size = Vector3.new(s*0.6, s*0.8, s*0.6)
+                                part.CanCollide = false
+                                part.Transparency = 0.85
                             end
                         end
                     end
                 end
-            end)
-        end
-        -- przywróć normalne rozmiary po wyłączeniu
-        pcall(function()
-            for _, player in ipairs(OSPlayers:GetPlayers()) do
-                if player == OSLocalPlayer then continue end
-                local char = OSGetChar(player)
-                if char then
-                    for _, part in ipairs(char:GetChildren()) do
-                        if part:IsA("BasePart") then
-                            if part.Name:lower():find("head") then part.Size = Vector3.new(2, 1, 1)
-                            elseif part.Name:lower():find("torso") or part.Name:lower():find("body") then part.Size = Vector3.new(2, 2, 1) end
+            end
+        end)
+    end
+    -- restore
+    pcall(function()
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p == LP then continue end
+            local c = p.Character
+            if c then
+                for _, part in ipairs(c:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        local n = part.Name:lower()
+                        if n == "head" then part.Size = Vector3.new(2,1,1); part.Transparency = 0
+                        elseif n:find("torso") or n == "upperbody" or n == "lowerbody" then part.Size = Vector3.new(2,2,1); part.Transparency = 0
+                        elseif n:find("arm") or n:find("leg") then part.Size = Vector3.new(1,1,1); part.Transparency = 0
                         end
                     end
                 end
             end
-        end)
+        end
+    end)
+end
+
+-- ======================================================================
+-- FLY (zaawansowany z BodyVelocity + BodyGyro)
+-- ======================================================================
+local flyConns = {}
+
+local function startFly()
+    if flyConns.fly then return end
+    local bg = Instance.new("BodyGyro"); bg.P = 9e4; bg.MaxTorque = Vector3.new(9e9,9e9,9e9)
+    local bv = Instance.new("BodyVelocity"); bv.MaxForce = Vector3.new(9e9,9e9,9e9)
+    local hrp = root()
+    if not hrp then return end
+    bg.CFrame = hrp.CFrame
+    bg.Parent = hrp; bv.Parent = hrp
+    
+    local function stopFly()
+        pcall(function() bg:Destroy() end)
+        pcall(function() bv:Destroy() end)
+        pcall(function() local h = hum(); if h then h.PlatformStand = false end end)
     end
     
-    -- ======================================================================
-    -- FLY
-    -- ======================================================================
-    local OSFlyParts = {}
-    local function OSStartFly()
-        local bg = Instance.new("BodyGyro"); bg.P = 9e4; bg.MaxTorque = Vector3.new(9e9,9e9,9e9); bg.CFrame = OSRootPart.CFrame
-        local bv = Instance.new("BodyVelocity"); bv.Velocity = Vector3.new(0,0,0); bv.MaxForce = Vector3.new(9e9,9e9,9e9)
-        bg.Parent = OSRootPart; bv.Parent = OSRootPart
-        OSFlyParts = {bg, bv}
-        
-        OSConns.OSFly = OSRunService.RenderStepped:Connect(function()
-            if not OSModule.Fly then
-                pcall(function() bg:Destroy() end); pcall(function() bv:Destroy() end)
-                if OSConns.OSFly then OSConns.OSFly:Disconnect(); OSConns.OSFly = nil end
-                pcall(function() local h = OSCharacter:FindFirstChildOfClass("Humanoid"); if h then h.PlatformStand = false end end)
+    local speed = Cfg.FlySpeed
+    flyConns.fly = RunSvc.RenderStepped:Connect(function()
+        if not Cfg.Fly then
+            stopFly()
+            if flyConns.fly then flyConns.fly:Disconnect(); flyConns.fly = nil end
+            return
+        end
+        pcall(function()
+            local h = hum(); if h then h.PlatformStand = true end
+            local cf = cam.CFrame
+            local fwd, rgt, up = cf.LookVector, cf.RightVector, cf.UpVector
+            local move = Vector3.new()
+            if UserInput:IsKeyDown(Enum.KeyCode.W) then move = move + fwd end
+            if UserInput:IsKeyDown(Enum.KeyCode.S) then move = move - fwd end
+            if UserInput:IsKeyDown(Enum.KeyCode.A) then move = move - rgt end
+            if UserInput:IsKeyDown(Enum.KeyCode.D) then move = move + rgt end
+            if UserInput:IsKeyDown(Enum.KeyCode.Space) then move = move + up end
+            if UserInput:IsKeyDown(Enum.KeyCode.LeftShift) then move = move - up end
+            
+            if move.Magnitude > 0 then
+                move = move.Unit * speed
+            end
+            
+            -- acceleration
+            local currentVel = bv.Velocity
+            local newVel = currentVel:Lerp(move, 0.15)
+            bv.Velocity = newVel
+            bg.CFrame = cf
+        end)
+    end)
+    
+    flyConns.speedChanger = RunSvc.Heartbeat:Connect(function()
+        speed = Cfg.FlySpeed
+    end)
+end
+
+-- ======================================================================
+-- NOCLIP
+-- ======================================================================
+local function noclipLoop()
+    while Cfg.Noclip do
+        task.wait()
+        pcall(function()
+            local c = LP.Character
+            if c then
+                for _, p in ipairs(c:GetChildren()) do
+                    if p:IsA("BasePart") then p.CanCollide = false end
+                end
+            end
+        end)
+    end
+end
+
+-- ======================================================================
+-- INFINITE JUMP
+-- ======================================================================
+local infJumpConn
+local function toggleInfJump(v)
+    if v then
+        infJumpConn = UserInput.JumpRequest:Connect(function()
+            if not Cfg.InfJump then
+                if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
                 return
             end
             pcall(function()
-                local h = OSCharacter:FindFirstChildOfClass("Humanoid"); if h then h.PlatformStand = true end
-                local cf = OSWorkspace.CurrentCamera.CFrame
-                local fwd, rgt, up = cf.LookVector, cf.RightVector, cf.UpVector
-                local a, wd, sd, ad = 0, 0, 0, 0
-                if OSUserInputService:IsKeyDown(Enum.KeyCode.W) then wd=1 end
-                if OSUserInputService:IsKeyDown(Enum.KeyCode.S) then wd=-1 end
-                if OSUserInputService:IsKeyDown(Enum.KeyCode.A) then ad=-1 end
-                if OSUserInputService:IsKeyDown(Enum.KeyCode.D) then ad=1 end
-                if OSUserInputService:IsKeyDown(Enum.KeyCode.Space) then a=1 end
-                if OSUserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then a=-1 end
-                bv.Velocity = (freq * wd + rgt * ad + up * a) * OSModule.FlySpeed
-                bg.CFrame = cf
+                local h = hum()
+                if h and h:GetState() ~= Enum.HumanoidStateType.Jumping then
+                    h:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
             end)
         end)
+    else
+        if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
     end
-    
-    -- ======================================================================
-    -- WALLHACK
-    -- ======================================================================
-    local function OSSetWallhack(v)
-        if v then
-            OSConns.Wallhack = OSRunService.RenderStepped:Connect(function()
-                if not OSModule.Wallhack then
-                    if OSConns.Wallhack then OSConns.Wallhack:Disconnect(); OSConns.Wallhack = nil end
-                    -- przywróć
-                    pcall(function()
-                        for _, v in ipairs(OSWorkspace:GetDescendants()) do
-                            if v:IsA("BasePart") then v.LocalTransparencyModifier = 0 end
-                        end
-                    end)
-                    return
-                end
+end
+
+-- ======================================================================
+-- WALLHACK (X-Ray)
+-- ======================================================================
+local wallhackConn
+local function toggleWallhack(v)
+    if v then
+        wallhackConn = RunSvc.RenderStepped:Connect(function()
+            if not Cfg.Wallhack then
+                if wallhackConn then wallhackConn:Disconnect(); wallhackConn = nil end
                 pcall(function()
-                    for _, v in ipairs(OSWorkspace:GetDescendants()) do
-                        if v:IsA("BasePart") and not v:IsDescendantOf(OSCharacter) then
-                            -- sprawdź czy to część gracza
-                            local isPlayerPart = false
-                            for _, p in ipairs(OSPlayers:GetPlayers()) do
-                                if p ~= OSLocalPlayer and OSGetChar(p) and v:IsDescendantOf(OSGetChar(p)) then
-                                    isPlayerPart = true; break
-                                end
+                    for _, v in ipairs(Workspace:GetDescendants()) do
+                        if v:IsA("BasePart") then v.LocalTransparencyModifier = 0 end
+                    end
+                end)
+                return
+            end
+            pcall(function()
+                for _, v in ipairs(Workspace:GetDescendants()) do
+                    if v:IsA("BasePart") and not LP.Character or not v:IsDescendantOf(LP.Character) then
+                        local isEnemyPart = false
+                        for _, p in ipairs(Players:GetPlayers()) do
+                            if p ~= LP and p.Character and v:IsDescendantOf(p.Character) then
+                                isEnemyPart = true; break
                             end
-                            if not isPlayerPart then
-                                v.LocalTransparencyModifier = 0.7
+                        end
+                        if not isEnemyPart then
+                            v.LocalTransparencyModifier = Cfg.WallhackTrans
+                        end
+                    end
+                end
+            end)
+        end)
+    else
+        if wallhackConn then wallhackConn:Disconnect(); wallhackConn = nil end
+        pcall(function()
+            for _, v in ipairs(Workspace:GetDescendants()) do
+                if v:IsA("BasePart") then v.LocalTransparencyModifier = 0 end
+            end
+        end)
+    end
+end
+
+-- ======================================================================
+-- FOV CHANGER
+-- ======================================================================
+local function fovChangerLoop()
+    while Cfg.FOVChanger do
+        task.wait(0.05)
+        pcall(function() cam.FieldOfView = Cfg.FOVValue end)
+    end
+    pcall(function() cam.FieldOfView = 70 end)
+end
+
+-- ======================================================================
+-- NO RECOIL / NO SPREAD
+-- ======================================================================
+local function noRecoilSpread()
+    while Cfg.NoRecoil or Cfg.NoSpread do
+        task.wait(0.2)
+        pcall(function()
+            local tool = char():FindFirstChildOfClass("Tool")
+            if tool then
+                for _, v in ipairs(tool:GetDescendants()) do
+                    if v:IsA("NumberValue") or v:IsA("IntValue") then
+                        local n = v.Name:lower()
+                        if Cfg.NoRecoil and (n:find("recoil") or n:find("kick")) then
+                            v.Value = 0
+                        end
+                        if Cfg.NoSpread and (n:find("spread") or n:find("accuracy") or n:find("inaccuracy") or n:find("bloom")) then
+                            v.Value = 0
+                        end
+                    end
+                    if Cfg.NoRecoil and v:IsA("Script") and v.ClassName ~= "LocalScript" then
+                        local n = v.Name:lower()
+                        if n:find("recoil") then v.Disabled = true end
+                    end
+                end
+            end
+            -- szukaj w ReplicatedStorage / Workspace
+            for _, v in ipairs(ReplicatedStorage:GetDescendants()) do
+                if v:IsA("NumberValue") or v:IsA("IntValue") then
+                    local n = v.Name:lower()
+                    if Cfg.NoSpread and (n:find("spread") or n:find("accuracy") or n:find("bloom")) then
+                        v.Value = 0
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- ======================================================================
+-- ZAAWANSOWANY BYPASS ANTYCHEAT
+-- ======================================================================
+local function advancedBypass()
+    pcall(function()
+        -- 1. Znajdź i zablokuj wszystkie skrypty anti-cheat
+        for _, v in ipairs(game:GetDescendants()) do
+            if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
+                local src = ""
+                pcall(function() src = v.Source end)
+                local srcLower = src:lower()
+                if srcLower:find("anticheat") or srcLower:find("antihack") or srcLower:find("detectexploit") or srcLower:find("kickplayer") then
+                    v.Disabled = true
+                end
+                local n = v.Name:lower()
+                if n:find("anticheat") or n:find("antihack") or n:find("detect") or n:find("antiexploit") then
+                    v.Disabled = true
+                end
+            end
+            
+            -- 2. Znajdź i blokuj remotes antycheat
+            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+                local n = v.Name:lower()
+                if n:find("anticheat") or n:find("antihack") or n:find("detect") or n:find("kick") or n:find("ban") or n:find("report") or n:find("admin") then
+                    -- blokada przez hook __namecall (już zrobione)
+                end
+            end
+        end
+        
+        -- 3. hookuj DebugInfo (Adonis/Knightmare)
+        local gc = getgc
+        local hf = hookfunction
+        local di = debugInfo
+        if hf and di then
+            local oldDi = di
+            debugInfo = newcclosure(function(...)
+                local args = {...}
+                if args[1] and type(args[1]) == "function" then
+                    local name = ""
+                    pcall(function() name = debugInfo(args[1]) end)
+                    if name:find("kick") or name:find("ban") or name:find("detect") or name:find("crash") then
+                        return "nil"
+                    end
+                end
+                return oldDi(...)
+            end)
+        end
+        
+        -- 4. hookuj Identify
+        if Identify then
+            Identify = function() return "Synapse X", "v4.0.0" end
+        end
+        
+        -- 5. spoofuj getexecutorname
+        if getexecutorname then
+            getexecutorname = function() return "Synapse X" end
+        end
+        
+        -- 6. blokuj checki Drawing
+        if Drawing then
+            local oldDrawing = Drawing.new
+            Drawing.new = function(...)
+                -- enable all drawing features
+                return oldDrawing(...)
+            end
+        end
+        
+        -- 7. blokuj checki CL (check caller)
+        if checkcaller then
+            checkcaller = function() return true end
+        end
+        
+        notify("Bypass", "✅ Anti-cheat bypass fully active", 5)
+    end)
+end
+
+-- ======================================================================
+-- KILL ALL - teleport i zabij każdego gracza
+-- ======================================================================
+local killAllRunning = false
+
+local function killAll()
+    if killAllRunning then return end
+    killAllRunning = true
+    
+    task.spawn(function()
+        local targets = getAlive()
+        if #targets == 0 then
+            notify("Kill All", "No alive targets found", 3)
+            killAllRunning = false
+            return
+        end
+        
+        notify("Kill All", "💀 Eliminating " .. #targets .. " players...", 4)
+        
+        -- Strategia 1: teleportuj się do każdego i użyj narzędzia
+        local tool = char():FindFirstChildOfClass("Tool")
+        local hasSword = tool and (tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("MeshPart"))
+        
+        for _, target in ipairs(targets) do
+            if not Cfg.KillAll then break end
+            pcall(function()
+                local r = getRoot(target)
+                local h = getHum(target)
+                if not r or not h or h.Health <= 0 then return end
+                
+                -- Teleportuj się do celu
+                local hrp = root()
+                if hrp then
+                    hrp.CFrame = CFrame.new(r.Position + Vector3.new(0, 5, 0))
+                    task.wait(0.05)
+                end
+                
+                -- Użyj narzędzia jeśli jest
+                if tool and hasSword then
+                    local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("MeshPart")
+                    if handle then
+                        -- dotknij przeciwnika
+                        local targetChar = target.Character
+                        if targetChar then
+                            handle.CFrame = r.CFrame
+                            -- symuluj dotknięcie
+                            pcall(function()
+                                for _, p in ipairs(targetChar:GetChildren()) do
+                                    if p:IsA("BasePart") then
+                                        firetouchinterest(handle, p, 0)
+                                        task.wait()
+                                        firetouchinterest(handle, p, 1)
+                                    end
+                                end
+                            end)
+                        end
+                    end
+                end
+                
+                -- Strategia 2: Wyślij damage przez remote
+                pcall(function()
+                    for _, v in ipairs(ReplicatedStorage:GetDescendants()) do
+                        if v:IsA("RemoteEvent") then
+                            local n = v.Name:lower()
+                            if n:find("damage") or n:find("hit") or n:find("attack") or n:find("swing") or n:find("bullet") or n:find("melee") then
+                                v:FireServer(target, target.Character and target.Character:FindFirstChild("Head") or r, 999)
+                                v:FireServer(target.Character and target.Character:FindFirstChild("Head") or r, r.Position)
+                                v:FireServer({Target = target, HitPart = target.Character and target.Character:FindFirstChild("Head") or r, Damage = 999})
                             end
                         end
                     end
                 end)
-            end)
-        else
-            if OSConns.Wallhack then OSConns.Wallhack:Disconnect(); OSConns.Wallhack = nil end
-            pcall(function()
-                for _, v in ipairs(OSWorkspace:GetDescendants()) do
-                    if v:IsA("BasePart") then v.LocalTransparencyModifier = 0 end
-                end
+                
+                -- Strategia 3: Zniszcz humanoid
+                pcall(function()
+                    local h2 = getHum(target)
+                    if h2 then h2.Health = 0 end
+                end)
+                
+                task.wait(0.1)
             end)
         end
-    end
-    
-    -- ======================================================================
-    -- BYPASS ANTYCHEAT
-    -- ======================================================================
-    local function OSBypassAntiCheat()
-        -- blokada wykrywania exploitów i anti-cheatów
+        
+        -- Strategia 4: masowe niszczenie
         pcall(function()
-            -- blokuj remotes anti-cheat
-            for _, v in ipairs(game:GetDescendants()) do
-                if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-                    local n = v.Name:lower()
-                    if n:find("anticheat") or n:find("antihack") or n:find("detect") or n:find("cheat") or n:find("kick") or n:find("ban") or n:find("report") then
-                        local mt = getrawmetatable and getrawmetatable(game)
-                        if mt then
-                            local oldNamecall = mt.__namecall
-                            setreadonly(mt, false)
-                            mt.__namecall = newcclosure(function(self, ...)
-                                local method = getnamecallmethod()
-                                if method == "FireServer" or method == "InvokeServer" then
-                                    local args = {...}
-                                    if self == v then return end -- blokuj
-                                end
-                                return oldNamecall(self, ...)
-                            end)
-                            setreadonly(mt, true)
-                        end
+            for _, target in ipairs(Players:GetPlayers()) do
+                if target ~= LP then
+                    local h2 = getHum(target)
+                    if h2 then h2.Health = 0 end
+                    local c = target.Character
+                    if c then
+                        pcall(function() c:BreakJoints() end)
                     end
-                end
-                -- blokuj skrypty anti-cheat
-                if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
-                    local n = v.Name:lower()
-                    if n:find("anticheat") or n:find("antihack") or n:find("detect") or n:find("cheat") then
-                        v.Disabled = true
-                    end
-                end
-            end
-            
-            -- blokuj wykrywanie VM/executor
-            if hookfunction then
-                local oldIdentify = Identify
-                if oldIdentify then
-                    Identify = function() return "Synapse X", "v3.0.0" end
-                end
-            end
-            
-            -- ukryj Drawing
-            if Drawing and Drawing.new then
-                local oldNew = Drawing.new
-                Drawing.new = function(type)
-                    -- zwracaj normalne Drawing
-                    return oldNew(type)
                 end
             end
         end)
-    end
-    
-    -- ======================================================================
-    -- FOV CHANGE
-    -- ======================================================================
-    local function OSFOVLoop()
-        while OSModule.FOVChange do
-            task.wait(0.1)
-            pcall(function()
-                local cam = OSWorkspace.CurrentCamera
-                cam.FieldOfView = OSModule.FOVValue
-            end)
+        
+        notify("Kill All", "💀 Kill All completed!", 3)
+        killAllRunning = false
+    end)
+end
+
+-- ======================================================================
+-- GŁÓWNA PĘTLA RENDER
+-- ======================================================================
+RunSvc.RenderStepped:Connect(function()
+    pcall(updateESP)
+    pcall(updateFovCircle)
+end)
+
+-- ======================================================================
+-- TWORZENIE ZAKŁADKI RAYFIELD
+-- ======================================================================
+
+local Tab = Window:CreateTab("[FPS] One Scope", 4483362458)
+
+-- === AIMBOT SECTION ===
+local aimSec = Tab:CreateSection("Aimbot")
+
+Tab:CreateToggle({Name = "Silent Aim", Section = aimSec, CurrentValue = false, Callback = function(v)
+    Cfg.SilentAim = v
+    notify("Silent Aim", v and "✅ ON (bullet redirect)" or "OFF", 3)
+end})
+
+Tab:CreateDropdown({Name = "Silent Aim Priority", Section = aimSec, Options = {"Head", "Torso", "Root"}, CurrentOption = "Head", Callback = function(v)
+    Cfg.SilentAimPriority = v
+end})
+
+Tab:CreateToggle({Name = "Aimbot (Aimlock)", Section = aimSec, CurrentValue = false, Callback = function(v)
+    Cfg.Aimbot = v
+    if v then task.spawn(aimbotLoop) end
+end})
+
+Tab:CreateToggle({Name = "Aimbot Prediction", Section = aimSec, CurrentValue = false, Callback = function(v)
+    Cfg.AimbotPredict = v
+end})
+
+Tab:CreateSlider({Name = "Aimbot FOV", Section = aimSec, Min = 30, Max = 500, Default = 200, Increment = 10, Callback = function(v)
+    Cfg.AimbotFOV = v
+end})
+
+Tab:CreateSlider({Name = "Smoothness", Section = aimSec, Min = 0.05, Max = 1, Default = 0.35, Increment = 0.05, Callback = function(v)
+    Cfg.AimbotSmooth = v
+end})
+
+Tab:CreateToggle({Name = "Triggerbot", Section = aimSec, CurrentValue = false, Callback = function(v)
+    Cfg.Triggerbot = v
+    if v then task.spawn(triggerbotLoop) end
+end})
+
+Tab:CreateSlider({Name = "Triggerbot Delay", Section = aimSec, Min = 0.01, Max = 0.5, Default = 0.05, Increment = 0.01, Callback = function(v)
+    Cfg.TriggerbotDelay = v
+end})
+
+Tab:CreateToggle({Name = "No Recoil", Section = aimSec, CurrentValue = false, Callback = function(v)
+    Cfg.NoRecoil = v
+    if v then task.spawn(noRecoilSpread) end
+end})
+
+Tab:CreateToggle({Name = "No Spread", Section = aimSec, CurrentValue = false, Callback = function(v)
+    Cfg.NoSpread = v
+    if v then task.spawn(noRecoilSpread) end
+end})
+
+-- === HITBOX ===
+local hitSec = Tab:CreateSection("Hitbox Expander")
+
+Tab:CreateToggle({Name = "Hitbox Expander", Section = hitSec, CurrentValue = false, Callback = function(v)
+    Cfg.HitboxExpand = v
+    if v then task.spawn(hitboxLoop) end
+end})
+
+Tab:CreateSlider({Name = "Hitbox Size", Section = hitSec, Min = 2, Max = 30, Default = 4, Increment = 1, Callback = function(v)
+    Cfg.HitboxSize = v
+end})
+
+-- === ESP SECTION ===
+local espSec = Tab:CreateSection("ESP")
+
+Tab:CreateToggle({Name = "Enable ESP", Section = espSec, CurrentValue = false, Callback = function(v)
+    Cfg.ESP = v
+    if not v then
+        for _, d in pairs(espDrawings) do
+            for _, obj in pairs(d) do pcall(function() obj.Visible = false end) end
         end
-        -- przywróć domyślne FOV
-        pcall(function() OSWorkspace.CurrentCamera.FieldOfView = 70 end)
     end
-    
-    -- ======================================================================
-    -- NOCLIP
-    -- ======================================================================
-    local function OSNoclipLoop()
-        while OSModule.Noclip do
-            task.wait()
-            pcall(function()
-                local c = OSLocalPlayer.Character
+    notify("ESP", v and "✅ ESP ON" or "OFF", 3)
+end})
+
+Tab:CreateToggle({Name = "ESP Box", Section = espSec, CurrentValue = true, Callback = function(v) Cfg.ESPBox = v end})
+Tab:CreateToggle({Name = "ESP Box Outline", Section = espSec, CurrentValue = true, Callback = function(v) Cfg.ESPBoxOutline = v end})
+Tab:CreateToggle({Name = "ESP Tracers", Section = espSec, CurrentValue = true, Callback = function(v) Cfg.ESPTracers = v end})
+Tab:CreateToggle({Name = "ESP Name", Section = espSec, CurrentValue = true, Callback = function(v) Cfg.ESPName = v end})
+Tab:CreateToggle({Name = "ESP Health Bar", Section = espSec, CurrentValue = true, Callback = function(v) Cfg.ESPHealth = v end})
+Tab:CreateToggle({Name = "ESP Distance", Section = espSec, CurrentValue = false, Callback = function(v) Cfg.ESPDistance = v end})
+
+Tab:CreateColorPicker({Name = "ESP Color", Section = espSec, Default = Color3.fromRGB(255, 50, 50), Callback = function(v)
+    Cfg.ESPColor = v
+end})
+
+Tab:CreateToggle({Name = "Rainbow ESP", Section = espSec, CurrentValue = false, Callback = function(v)
+    Cfg.ESPRainbow = v
+end})
+
+Tab:CreateSlider({Name = "Rainbow Speed", Section = espSec, Min = 0.5, Max = 10, Default = 1, Increment = 0.5, Callback = function(v)
+    Cfg.ESPRainbowSpeed = v
+end})
+
+Tab:CreateToggle({Name = "Rainbow Tracers", Section = espSec, CurrentValue = false, Callback = function(v)
+    Cfg.TracersRainbow = v
+end})
+
+-- === FOV CIRCLE ===
+local fovSec = Tab:CreateSection("FOV Circle")
+
+Tab:CreateToggle({Name = "FOV Circle", Section = fovSec, CurrentValue = false, Callback = function(v)
+    Cfg.FovCircle = v
+end})
+
+Tab:CreateColorPicker({Name = "Circle Color", Section = fovSec, Default = Color3.fromRGB(0, 255, 100), Callback = function(v)
+    Cfg.FovCircleColor = v
+    if not Cfg.FovCircleRainbow then fovCircle.Color = v end
+end})
+
+Tab:CreateToggle({Name = "Rainbow Circle", Section = fovSec, CurrentValue = false, Callback = function(v)
+    Cfg.FovCircleRainbow = v
+end})
+
+Tab:CreateSlider({Name = "Circle Size", Section = fovSec, Min = 30, Max = 500, Default = 150, Increment = 10, Callback = function(v)
+    Cfg.FovCircleSize = v
+    fovCircle.Radius = v
+end})
+
+Tab:CreateSlider({Name = "Thickness", Section = fovSec, Min = 1, Max = 10, Default = 2, Increment = 1, Callback = function(v)
+    Cfg.FovCircleThick = v; fovCircle.Thickness = v
+end})
+
+Tab:CreateSlider({Name = "Transparency", Section = fovSec, Min = 0, Max = 1, Default = 0.5, Increment = 0.05, Callback = function(v)
+    Cfg.FovCircleTrans = v; fovCircle.Transparency = v
+end})
+
+-- === MOVEMENT ===
+local movSec = Tab:CreateSection("Movement")
+
+Tab:CreateToggle({Name = "Fly", Section = movSec, CurrentValue = false, Callback = function(v)
+    Cfg.Fly = v
+    if v then startFly() end
+end})
+
+Tab:CreateSlider({Name = "Fly Speed", Section = movSec, Min = 10, Max = 500, Default = 50, Increment = 5, Callback = function(v)
+    Cfg.FlySpeed = v
+end})
+
+Tab:CreateToggle({Name = "Noclip", Section = movSec, CurrentValue = false, Callback = function(v)
+    Cfg.Noclip = v
+    if v then task.spawn(noclipLoop) end
+end})
+
+Tab:CreateToggle({Name = "Infinite Jump", Section = movSec, CurrentValue = false, Callback = function(v)
+    Cfg.InfJump = v; toggleInfJump(v)
+end})
+
+-- === VISUALS ===
+local visSec = Tab:CreateSection("Visuals")
+
+Tab:CreateToggle({Name = "Wallhack (X-Ray)", Section = visSec, CurrentValue = false, Callback = function(v)
+    Cfg.Wallhack = v; toggleWallhack(v)
+end})
+
+Tab:CreateSlider({Name = "Wallhack Transparency", Section = visSec, Min = 0.1, Max = 0.9, Default = 0.55, Increment = 0.05, Callback = function(v)
+    Cfg.WallhackTrans = v
+end})
+
+Tab:CreateToggle({Name = "FOV Changer", Section = visSec, CurrentValue = false, Callback = function(v)
+    Cfg.FOVChanger = v
+    if v then task.spawn(fovChangerLoop) end
+end})
+
+Tab:CreateSlider({Name = "FOV Value", Section = visSec, Min = 30, Max = 160, Default = 120, Increment = 5, Callback = function(v)
+    Cfg.FOVValue = v
+end})
+
+-- === BYPASS ===
+local bypSec = Tab:CreateSection("Anti-Cheat Bypass")
+
+Tab:CreateToggle({Name = "Bypass Anti-Cheat", Section = bypSec, CurrentValue = false, Callback = function(v)
+    Cfg.Bypass = v
+    if v then
+        task.spawn(advancedBypass)
+    end
+end})
+
+Tab:CreateButton({Name = "🔄 Rejoin (anti-ban)", Section = bypSec, Callback = function()
+    pcall(function()
+        notify("Rejoin", "Teleporting...", 3)
+        task.wait(0.5)
+        TeleportSvc:Teleport(game.PlaceId, LP)
+    end)
+end})
+
+-- === KILL ALL ===
+local killSec = Tab:CreateSection("Kill All")
+
+Tab:CreateToggle({Name = "Enable Kill All Mode", Section = killSec, CurrentValue = false, Callback = function(v)
+    Cfg.KillAll = v
+end})
+
+Tab:CreateButton({Name = "💀 EXECUTE KILL ALL", Section = killSec, Callback = function()
+    if killAllRunning then
+        notify("Kill All", "Already in progress!", 3)
+        return
+    end
+    killAll()
+end})
+
+Tab:CreateButton({Name = "☠️ Kill All + Destroy", Section = killSec, Callback = function()
+    if killAllRunning then
+        notify("Kill All", "Already in progress!", 3)
+        return
+    end
+    Cfg.KillAll = true
+    killAll()
+    task.wait(1)
+    -- dodatkowe niszczenie
+    pcall(function()
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LP then
+                local c = p.Character
                 if c then
-                    for _, p in ipairs(c:GetChildren()) do
-                        if p:IsA("BasePart") then p.CanCollide = false end
-                    end
+                    pcall(function() c:BreakJoints() end)
+                    pcall(function() c:ClearAllChildren() end)
                 end
-            end)
-        end
-    end
-    
-    -- ======================================================================
-    -- NO RECOIL / NO SPREAD
-    -- ======================================================================
-    local function OSNoRecoilSpreadLoop()
-        while OSModule.NoRecoil or OSModule.NoSpread do
-            task.wait(0.3)
-            pcall(function()
-                local tool = OSCharacter:FindFirstChildOfClass("Tool")
-                if tool then
-                    local ws = tool:FindFirstChild("WeaponScript") or tool:FindFirstChild("GunScript")
-                    if ws then
-                        if OSModule.NoRecoil then ws.Disabled = true end
-                        if OSModule.NoSpread then
-                            local spread = ws:FindFirstChild("Spread") or ws:FindFirstChild("Recoil")
-                            if spread then spread.Value = 0 end
-                        end
-                    end
-                end
-            end)
-        end
-    end
-    
-    -- ======================================================================
-    -- TWORZENIE ZAKŁADKI RAYFIELD
-    -- ======================================================================
-    
-    local OSTab = Window:CreateTab("[FPS] One Scope", 4483362458)
-    
-    -- === SILENT AIM / AIMBOT ===
-    local aimSec = OSTab:CreateSection("Aimbot")
-    
-    OSTab:CreateToggle({Name = "Silent Aim", Section = aimSec, CurrentValue = false, Callback = function(v)
-        OSModule.SilentAim = v
-        OSNotify("One Scope", "Silent Aim " .. (v and "ON" or "OFF"), 3)
-    end})
-    
-    OSTab:CreateToggle({Name = "Aimbot (Aimlock)", Section = aimSec, CurrentValue = false, Callback = function(v)
-        OSModule.Aimbot = v
-        if v then task.spawn(OSAimbotLoop) end
-        OSNotify("One Scope", "Aimbot " .. (v and "ON" or "OFF"), 3)
-    end})
-    
-    OSTab:CreateToggle({Name = "Triggerbot", Section = aimSec, CurrentValue = false, Callback = function(v)
-        OSModule.Triggerbot = v
-        if v then task.spawn(OSTriggerbotLoop) end
-    end})
-    
-    OSTab:CreateSlider({Name = "Aimbot FOV", Section = aimSec, Min = 30, Max = 500, Default = 200, Increment = 10, Callback = function(v)
-        OSModule.AimFOV = v
-    end})
-    
-    OSTab:CreateSlider({Name = "Aimlock Smoothness", Section = aimSec, Min = 0.1, Max = 1, Default = 0.3, Increment = 0.05, Callback = function(v)
-        OSModule.AimlockSmoothness = v
-    end})
-    
-    OSTab:CreateToggle({Name = "No Recoil", Section = aimSec, CurrentValue = false, Callback = function(v)
-        OSModule.NoRecoil = v
-        if v then task.spawn(OSNoRecoilSpreadLoop) end
-    end})
-    
-    OSTab:CreateToggle({Name = "No Spread", Section = aimSec, CurrentValue = false, Callback = function(v)
-        OSModule.NoSpread = v
-        if v then task.spawn(OSNoRecoilSpreadLoop) end
-    end})
-    
-    -- === HITBOX ===
-    local hitSec = OSTab:CreateSection("Hitbox Expander")
-    
-    OSTab:CreateToggle({Name = "Hitbox Expander", Section = hitSec, CurrentValue = false, Callback = function(v)
-        OSModule.HitboxExpander = v
-        if v then task.spawn(OSHitboxLoop) end
-    end})
-    
-    OSTab:CreateSlider({Name = "Hitbox Size", Section = hitSec, Min = 2, Max = 25, Default = 5, Increment = 1, Callback = function(v)
-        OSModule.HitboxSize = v
-    end})
-    
-    -- === ESP ===
-    local espSec = OSTab:CreateSection("ESP")
-    
-    OSTab:CreateToggle({Name = "Enable ESP", Section = espSec, CurrentValue = false, Callback = function(v)
-        OSModule.ESP = v
-        if v then
-            OSConns.ESP = OSRunService.RenderStepped:Connect(OSUpdateESP)
-            OSNotify("One Scope", "ESP enabled", 3)
-        else
-            if OSConns.ESP then OSConns.ESP:Disconnect(); OSConns.ESP = nil end
-            OSClearESP()
-        end
-    end})
-    
-    OSTab:CreateToggle({Name = "ESP Box", Section = espSec, CurrentValue = true, Callback = function(v) OSModule.ESPBox = v end})
-    OSTab:CreateToggle({Name = "ESP Tracers", Section = espSec, CurrentValue = true, Callback = function(v) OSModule.ESPTracers = v end})
-    OSTab:CreateToggle({Name = "ESP Health Bar", Section = espSec, CurrentValue = true, Callback = function(v) OSModule.ESPHealth = v end})
-    OSTab:CreateToggle({Name = "ESP Name", Section = espSec, CurrentValue = true, Callback = function(v) OSModule.ESPName = v end})
-    OSTab:CreateToggle({Name = "ESP Distance", Section = espSec, CurrentValue = false, Callback = function(v) OSModule.ESPDistance = v end})
-    
-    OSTab:CreateColorPicker({Name = "ESP Color", Section = espSec, Default = Color3.fromRGB(255, 50, 50), Callback = function(v)
-        OSModule.ESPColor = v
-    end})
-    
-    OSTab:CreateToggle({Name = "Rainbow ESP", Section = espSec, CurrentValue = false, Callback = function(v)
-        OSModule.ESPRainbow = v
-    end})
-    
-    OSTab:CreateToggle({Name = "Rainbow Tracers", Section = espSec, CurrentValue = false, Callback = function(v)
-        OSModule.TracersRainbow = v
-    end})
-    
-    -- === FOV CIRCLE ===
-    local fovSec = OSTab:CreateSection("FOV Circle")
-    
-    OSTab:CreateToggle({Name = "FOV Circle", Section = fovSec, CurrentValue = false, Callback = function(v)
-        OSModule.FovCircle = v
-        if v then task.spawn(FovCircleLoop) end
-    end})
-    
-    OSTab:CreateColorPicker({Name = "Circle Color", Section = fovSec, Default = Color3.fromRGB(0, 255, 100), Callback = function(v)
-        OSModule.FovCircleColor = v
-        if not OSModule.FovCircleRainbow then OSFovCircle.Color = v end
-    end})
-    
-    OSTab:CreateToggle({Name = "Rainbow Circle", Section = fovSec, CurrentValue = false, Callback = function(v)
-        OSModule.FovCircleRainbow = v
-    end})
-    
-    OSTab:CreateSlider({Name = "Circle Size", Section = fovSec, Min = 30, Max = 500, Default = 150, Increment = 10, Callback = function(v)
-        OSModule.FovCircleSize = v
-        OSFovCircle.Radius = v
-    end})
-    
-    OSTab:CreateSlider({Name = "Circle Thickness", Section = fovSec, Min = 1, Max = 10, Default = 2, Increment = 1, Callback = function(v)
-        OSModule.FovCircleThickness = v
-        OSFovCircle.Thickness = v
-    end})
-    
-    OSTab:CreateSlider({Name = "Circle Transparency", Section = fovSec, Min = 0, Max = 1, Default = 0.6, Increment = 0.05, Callback = function(v)
-        OSModule.FovCircleTransparency = v
-        OSFovCircle.Transparency = v
-    end})
-    
-    -- === MOVEMENT ===
-    local movSec = OSTab:CreateSection("Movement")
-    
-    OSTab:CreateToggle({Name = "Fly", Section = movSec, CurrentValue = false, Callback = function(v)
-        OSModule.Fly = v
-        if v then OSStartFly() end
-    end})
-    
-    OSTab:CreateSlider({Name = "Fly Speed", Section = movSec, Min = 10, Max = 500, Default = 50, Increment = 5, Callback = function(v)
-        OSModule.FlySpeed = v
-    end})
-    
-    OSTab:CreateToggle({Name = "Noclip", Section = movSec, CurrentValue = false, Callback = function(v)
-        OSModule.Noclip = v
-        if v then task.spawn(OSNoclipLoop) end
-    end})
-    
-    OSTab:CreateToggle({Name = "Infinite Jump", Section = movSec, CurrentValue = false, Callback = function(v)
-        OSModule.InfiniteJump = v
-        if v then
-            OSConns.InfJump = OSUserInputService.JumpRequest:Connect(function()
-                if not OSModule.InfiniteJump then
-                    if OSConns.InfJump then OSConns.InfJump:Disconnect(); OSConns.InfJump = nil end; return
-                end
-                pcall(function() local h = OSCharacter:FindFirstChildOfClass("Humanoid"); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end end)
-            end)
-        elseif OSConns.InfJump then OSConns.InfJump:Disconnect(); OSConns.InfJump = nil end
-    end})
-    
-    -- === VISUALS ===
-    local visSec = OSTab:CreateSection("Visuals")
-    
-    OSTab:CreateToggle({Name = "Wallhack (X-Ray)", Section = visSec, CurrentValue = false, Callback = function(v)
-        OSModule.Wallhack = v
-        OSSetWallhack(v)
-    end})
-    
-    OSTab:CreateToggle({Name = "FOV Changer", Section = visSec, CurrentValue = false, Callback = function(v)
-        OSModule.FOVChange = v
-        if v then task.spawn(OSFOVLoop) end
-    end})
-    
-    OSTab:CreateSlider({Name = "FOV Value", Section = visSec, Min = 30, Max = 160, Default = 120, Increment = 5, Callback = function(v)
-        OSModule.FOVValue = v
-    end})
-    
-    -- === BYPASS ===
-    local bypSec = OSTab:CreateSection("Bypass")
-    
-    OSTab:CreateToggle({Name = "Bypass Anti-Cheat", Section = bypSec, CurrentValue = false, Callback = function(v)
-        OSModule.BypassAntiCheat = v
-        if v then
-            OSBypassAntiCheat()
-            OSNotify("Bypass", "Anti-cheat bypass active! (blokada kick/ban)", 5)
-        end
-    end})
-    
-    OSTab:CreateButton({Name = "Rejoin (anti-ban)", Section = bypSec, Callback = function()
-        pcall(function() game:GetService("TeleportService"):Teleport(game.PlaceId, OSLocalPlayer) end)
-    end})
-    
-    -- ======================================================================
-    -- INIT
-    -- ======================================================================
-    OSNotify("One Scope", "[FPS] One Scope detected! Module loaded with all features.", 6)
-    OSNotify("One Scope", "Use FOV Circle + Rainbow for best visuals", 5)
-    
-    -- czyszczenie przy usuwaniu gracza
-    OSPlayers.PlayerRemoving:Connect(function(p)
-        if OSEspDrawings[p] then
-            for _, d in pairs(OSEspDrawings[p]) do
-                if type(d) == "table" then for _, v in pairs(d) do pcall(function() v:Remove() end) end
-                else pcall(function() d:Remove() end) end
             end
-            OSEspDrawings[p] = nil
         end
     end)
-    
-end -- koniec IS_ONE_SCOPE
+end})
+
+-- === UTILITIES ===
+local utilSec = Tab:CreateSection("Utilities")
+
+Tab:CreateButton({Name = "Reset Character", Section = utilSec, Callback = function()
+    pcall(function()
+        LP:LoadCharacter()
+    end)
+end})
+
+Tab:CreateButton({Name = "Anti-Afk", Section = utilSec, Callback = function()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+        notify("Anti-Afk", "Activated! Press Ctrl+T to toggle", 3)
+    end)
+end})
+
+Tab:CreateButton({Name = "Unlock FPS (uncap)", Section = utilSec, Callback = function()
+    setfpscap(999)
+    notify("FPS", "Uncapped! (999 FPS)", 3)
+end})
+
+-- == CLEANUP ==
+Players.PlayerRemoving:Connect(function(p)
+    if espDrawings[p] then
+        for _, obj in pairs(espDrawings[p]) do
+            pcall(function() obj:Remove() end)
+        end
+        espDrawings[p] = nil
+    end
+end)
+
+notify("One Scope", "🔥 [FPS] One Scope loaded — all " .. #Tab:GetSections() .. "
 
 print("Tung Tung Sahur loaded successfully!")
