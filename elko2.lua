@@ -1,13 +1,11 @@
 --[[
-  Roblox Security Auditor v5.0 - Source Viewer Edition
-  Full script source inspection in GUI
-  Authorized pentest tool ONLY
+  Roblox Security Auditor v5.1 - Remote Reference Finder
+  Shows which scripts use each RemoteEvent/RemoteFunction
 ]]
 
 -- ===== INIT =====
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
-local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -26,6 +24,7 @@ local Data = {
     AntiCheats = {}, AdminSys = {}, CurrencySys = {},
     Backdoors = {}, Vulns = {}, Exploits = {},
     AllSources = {},
+    RemoteRefs = {}, -- remote_name -> {scripts that reference it}
     ScanCount = 0,
 }
 
@@ -45,7 +44,7 @@ local Pats = {
           "getrawmetatable","setrawmetatable","getnamecallmethod"},
 }
 
--- ===== UI =====
+-- ===== BUILD UI =====
 local UI = {}
 local function BuildUI()
     local sg = Instance.new("ScreenGui")
@@ -53,36 +52,35 @@ local function BuildUI()
     sg.ResetOnSpawn = false
     sg.Parent = CoreGui
 
-    -- MAIN FRAME
     local main = Instance.new("Frame")
     main.Name = "Main"
     main.Parent = sg
     main.BackgroundColor3 = Color3.fromRGB(12,12,22)
     main.BorderSizePixel = 0
-    main.Position = UDim2.new(0.05,0,0.03,0)
-    main.Size = UDim2.new(0.9,0,0.94,0)
+    main.Position = UDim2.new(0.03,0,0.02,0)
+    main.Size = UDim2.new(0.94,0,0.96,0)
     main.Draggable = true
     main.Active = true
     main.ClipsDescendants = true
 
-    -- Title bar
+    -- Title
     local title = Instance.new("TextLabel")
     title.Parent = main
     title.BackgroundColor3 = Color3.fromRGB(20,20,35)
     title.BorderSizePixel = 0
-    title.Size = UDim2.new(1,0,0,32)
+    title.Size = UDim2.new(1,0,0,30)
     title.Font = Enum.Font.Code
-    title.Text = "  Auditor v5.0 | Source Viewer"
+    title.Text = "  Auditor v5.1 | Source Viewer + Remote References"
     title.TextColor3 = Color3.fromRGB(0,255,120)
-    title.TextSize = 15
+    title.TextSize = 14
     title.TextXAlignment = Enum.TextXAlignment.Left
 
     local closeBtn = Instance.new("TextButton")
     closeBtn.Parent = title
     closeBtn.BackgroundColor3 = Color3.fromRGB(200,20,20)
     closeBtn.BorderSizePixel = 0
-    closeBtn.Size = UDim2.new(0,28,0,28)
-    closeBtn.Position = UDim2.new(1,-32,0,2)
+    closeBtn.Size = UDim2.new(0,26,0,26)
+    closeBtn.Position = UDim2.new(1,-30,0,2)
     closeBtn.Font = Enum.Font.Code
     closeBtn.Text = "X"
     closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
@@ -94,124 +92,122 @@ local function BuildUI()
     btnRow.Parent = main
     btnRow.BackgroundColor3 = Color3.fromRGB(16,16,28)
     btnRow.BorderSizePixel = 0
-    btnRow.Position = UDim2.new(0,0,0,32)
-    btnRow.Size = UDim2.new(1,0,0,38)
+    btnRow.Position = UDim2.new(0,0,0,30)
+    btnRow.Size = UDim2.new(1,0,0,36)
 
     local scanBtn = Instance.new("TextButton")
     scanBtn.Parent = btnRow
     scanBtn.BackgroundColor3 = Color3.fromRGB(0,140,50)
     scanBtn.BorderSizePixel = 0
-    scanBtn.Position = UDim2.new(0,8,0,5)
-    scanBtn.Size = UDim2.new(0,120,0,28)
+    scanBtn.Position = UDim2.new(0,8,0,4)
+    scanBtn.Size = UDim2.new(0,115,0,28)
     scanBtn.Font = Enum.Font.Code
-    scanBtn.Text = "▶ SCAN"
+    scanBtn.Text = "▶ START SCAN"
     scanBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    scanBtn.TextSize = 13
+    scanBtn.TextSize = 12
 
     local exportBtn = Instance.new("TextButton")
     exportBtn.Parent = btnRow
     exportBtn.BackgroundColor3 = Color3.fromRGB(0,70,170)
     exportBtn.BorderSizePixel = 0
-    exportBtn.Position = UDim2.new(0,136,0,5)
-    exportBtn.Size = UDim2.new(0,90,0,28)
+    exportBtn.Position = UDim2.new(0,130,0,4)
+    exportBtn.Size = UDim2.new(0,85,0,28)
     exportBtn.Font = Enum.Font.Code
     exportBtn.Text = "📋 COPY"
     exportBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    exportBtn.TextSize = 13
+    exportBtn.TextSize = 12
 
     local clearBtn = Instance.new("TextButton")
     clearBtn.Parent = btnRow
     clearBtn.BackgroundColor3 = Color3.fromRGB(100,25,25)
     clearBtn.BorderSizePixel = 0
-    clearBtn.Position = UDim2.new(0,234,0,5)
-    clearBtn.Size = UDim2.new(0,70,0,28)
+    clearBtn.Position = UDim2.new(0,222,0,4)
+    clearBtn.Size = UDim2.new(0,65,0,28)
     clearBtn.Font = Enum.Font.Code
     clearBtn.Text = "CLEAR"
     clearBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    clearBtn.TextSize = 13
+    clearBtn.TextSize = 12
 
-    -- Category filter buttons
+    -- Filter buttons
     local filterRow = Instance.new("Frame")
     filterRow.Parent = main
     filterRow.BackgroundColor3 = Color3.fromRGB(16,16,28)
     filterRow.BorderSizePixel = 0
-    filterRow.Position = UDim2.new(0,0,0,70)
-    filterRow.Size = UDim2.new(1,0,0,24)
+    filterRow.Position = UDim2.new(0,0,0,66)
+    filterRow.Size = UDim2.new(1,0,0,22)
 
     local filterNames = {"ALL","SCRIPTS","LOCALS","MODULES","REMOTES","AC","ADMIN","CURRENCY","BACKDOOR"}
     local filterBtns = {}
-    local curFilter = "ALL"
 
     for i, fn in ipairs(filterNames) do
         local fb = Instance.new("TextButton")
         fb.Parent = filterRow
         fb.BackgroundColor3 = Color3.fromRGB(30,30,45)
         fb.BorderSizePixel = 0
-        fb.Position = UDim2.new(0, (i-1)*75 + 4, 0, 2)
-        fb.Size = UDim2.new(0, 70, 0, 20)
+        fb.Position = UDim2.new(0, (i-1)*73 + 3, 0, 1)
+        fb.Size = UDim2.new(0, 68, 0, 20)
         fb.Font = Enum.Font.Code
         fb.Text = fn
         fb.TextColor3 = Color3.fromRGB(180,180,200)
-        fb.TextSize = 10
+        fb.TextSize = 9
         fb.Name = fn
         filterBtns[fn] = fb
     end
 
-    -- SPLIT PANEL: Left = list, Right = source viewer
-    -- Left panel
+    -- LEFT: Script list
     local leftPanel = Instance.new("Frame")
     leftPanel.Parent = main
     leftPanel.BackgroundColor3 = Color3.fromRGB(15,15,25)
     leftPanel.BorderSizePixel = 0
-    leftPanel.Position = UDim2.new(0,0,0,94)
-    leftPanel.Size = UDim2.new(0.35,0,1,-94)
+    leftPanel.Position = UDim2.new(0,0,0,88)
+    leftPanel.Size = UDim2.new(0.32,0,1,-88)
 
     local leftLabel = Instance.new("TextLabel")
     leftLabel.Parent = leftPanel
     leftLabel.BackgroundColor3 = Color3.fromRGB(20,20,33)
     leftLabel.BorderSizePixel = 0
-    leftLabel.Size = UDim2.new(1,0,0,20)
+    leftLabel.Size = UDim2.new(1,0,0,18)
     leftLabel.Font = Enum.Font.Code
-    leftLabel.Text = "  Scripts (" .. Data.ScanCount .. ")"
+    leftLabel.Text = "  Items"
     leftLabel.TextColor3 = Color3.fromRGB(150,200,255)
-    leftLabel.TextSize = 10
+    leftLabel.TextSize = 9
     leftLabel.TextXAlignment = Enum.TextXAlignment.Left
 
     local scriptList = Instance.new("ScrollingFrame")
     scriptList.Parent = leftPanel
     scriptList.BackgroundColor3 = Color3.fromRGB(10,10,18)
     scriptList.BorderSizePixel = 0
-    scriptList.Position = UDim2.new(0,0,0,20)
-    scriptList.Size = UDim2.new(1,0,1,-20)
+    scriptList.Position = UDim2.new(0,0,0,18)
+    scriptList.Size = UDim2.new(1,0,1,-18)
     scriptList.CanvasSize = UDim2.new(0,0,0,0)
     scriptList.ScrollBarThickness = 5
     scriptList.ScrollBarImageColor3 = Color3.fromRGB(50,50,70)
 
-    -- Right panel - source viewer
+    -- RIGHT: Source viewer
     local rightPanel = Instance.new("Frame")
     rightPanel.Parent = main
     rightPanel.BackgroundColor3 = Color3.fromRGB(8,8,16)
     rightPanel.BorderSizePixel = 0
-    rightPanel.Position = UDim2.new(0.35, 2, 0, 94)
-    rightPanel.Size = UDim2.new(0.65, -2, 1, -94)
+    rightPanel.Position = UDim2.new(0.32, 2, 0, 88)
+    rightPanel.Size = UDim2.new(0.68, -2, 1, -88)
 
     local rightLabel = Instance.new("TextLabel")
     rightLabel.Parent = rightPanel
     rightLabel.BackgroundColor3 = Color3.fromRGB(20,20,33)
     rightLabel.BorderSizePixel = 0
-    rightLabel.Size = UDim2.new(1,0,0,20)
+    rightLabel.Size = UDim2.new(1,0,0,18)
     rightLabel.Font = Enum.Font.Code
-    rightLabel.Text = "  Source Viewer (click a script to view)"
+    rightLabel.Text = "  Source Viewer"
     rightLabel.TextColor3 = Color3.fromRGB(150,200,255)
-    rightLabel.TextSize = 10
+    rightLabel.TextSize = 9
     rightLabel.TextXAlignment = Enum.TextXAlignment.Left
 
     local sourceView = Instance.new("ScrollingFrame")
     sourceView.Parent = rightPanel
     sourceView.BackgroundColor3 = Color3.fromRGB(5,5,12)
     sourceView.BorderSizePixel = 0
-    sourceView.Position = UDim2.new(0,0,0,20)
-    sourceView.Size = UDim2.new(1,0,1,-20)
+    sourceView.Position = UDim2.new(0,0,0,18)
+    sourceView.Size = UDim2.new(1,0,1,-18)
     sourceView.CanvasSize = UDim2.new(0,0,0,0)
     sourceView.ScrollBarThickness = 6
     sourceView.ScrollBarImageColor3 = Color3.fromRGB(50,50,70)
@@ -222,32 +218,30 @@ local function BuildUI()
     sourceText.Size = UDim2.new(1,-10,0,0)
     sourceText.Position = UDim2.new(0,5,0,5)
     sourceText.Font = Enum.Font.Code
-    sourceText.Text = "Select a script from the list to view its source code."
+    sourceText.Text = "Ready. Click START SCAN to begin."
     sourceText.TextColor3 = Color3.fromRGB(150,150,180)
-    sourceText.TextSize = 12
+    sourceText.TextSize = 11
     sourceText.TextXAlignment = Enum.TextXAlignment.Left
     sourceText.TextYAlignment = Enum.TextYAlignment.Top
     sourceText.RichText = true
 
-    -- Status
+    -- Status bar
     local status = Instance.new("TextLabel")
     status.Parent = main
     status.BackgroundColor3 = Color3.fromRGB(16,16,28)
     status.BorderSizePixel = 0
-    status.Position = UDim2.new(0,0,1,-22)
-    status.Size = UDim2.new(1,0,0,22)
+    status.Position = UDim2.new(0,0,1,-20)
+    status.Size = UDim2.new(1,0,0,20)
     status.Font = Enum.Font.Code
     status.Text = "Ready."
     status.TextColor3 = Color3.fromRGB(130,180,220)
-    status.TextSize = 10
+    status.TextSize = 9
     status.TextXAlignment = Enum.TextXAlignment.Left
 
     UI.ScreenGui = sg
-    UI.Main = main
     UI.ScanBtn = scanBtn
     UI.ExportBtn = exportBtn
     UI.ClearBtn = clearBtn
-    UI.FilterRow = filterRow
     UI.FilterBtns = filterBtns
     UI.ScriptList = scriptList
     UI.SourceView = sourceView
@@ -255,29 +249,20 @@ local function BuildUI()
     UI.Status = status
     UI.LeftLabel = leftLabel
     UI.CurrentFilter = "ALL"
-    UI.AllEntries = {}
 end
 
 -- ===== LOG =====
-local function Log(msg, color)
-    color = color or Color3.fromRGB(180,180,180)
-    if UI.Status then
-        UI.Status.Text = tostring(msg)
-    end
-end
-
 local function SetStatus(s)
     if UI.Status then
-        UI.Status.Text = s
+        UI.Status.Text = tostring(s)
     end
 end
 
--- ===== POPULATE SCRIPT LIST =====
+-- ===== POPULATE LIST =====
 local function PopulateScriptList(filter)
     filter = filter or "ALL"
     UI.CurrentFilter = filter
 
-    -- Clear list
     for _, v in pairs(UI.ScriptList:GetChildren()) do
         if v:IsA("TextButton") or v:IsA("TextLabel") or v:IsA("UIListLayout") then
             v:Destroy()
@@ -307,10 +292,10 @@ local function PopulateScriptList(filter)
     end
     if filter == "ALL" or filter == "REMOTES" then
         for _, v in ipairs(Data.Remotes) do
-            table.insert(entries, {Name=v.Name, Path=v.Path, Source=nil, Class="RemoteEvent", Color=Color3.fromRGB(200,100,255)})
+            table.insert(entries, {Name=v.Name, Path=v.Path, Source=nil, Class="RemoteEvent", Color=Color3.fromRGB(200,100,255), IsRemote=true})
         end
         for _, v in ipairs(Data.RemoteFuncs) do
-            table.insert(entries, {Name=v.Name, Path=v.Path, Source=nil, Class="RemoteFunction", Color=Color3.fromRGB(200,50,255)})
+            table.insert(entries, {Name=v.Name, Path=v.Path, Source=nil, Class="RemoteFunction", Color=Color3.fromRGB(200,50,255), IsRemote=true})
         end
     end
     if filter == "AC" then
@@ -334,13 +319,12 @@ local function PopulateScriptList(filter)
         end
     end
 
-    -- Add entries to list
     for _, entry in ipairs(entries) do
         local btn = Instance.new("TextButton")
         btn.Parent = UI.ScriptList
         btn.BackgroundColor3 = Color3.fromRGB(18,18,30)
         btn.BorderSizePixel = 0
-        btn.Size = UDim2.new(1,0,0,22)
+        btn.Size = UDim2.new(1,0,0,20)
         btn.Font = Enum.Font.Code
         btn.Text = ""
         btn.TextColor3 = Color3.fromRGB(200,200,200)
@@ -360,58 +344,58 @@ local function PopulateScriptList(filter)
         }
         local iconColor = iconColors[entry.Class] or Color3.fromRGB(180,180,180)
 
-        -- Color dot + name
         local dot = Instance.new("Frame")
         dot.Parent = btn
         dot.BackgroundColor3 = iconColor
         dot.BorderSizePixel = 0
         dot.Position = UDim2.new(0,3,0,7)
-        dot.Size = UDim2.new(0,6,0,6)
+        dot.Size = UDim2.new(0,5,0,5)
 
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Parent = btn
         nameLabel.BackgroundTransparency = 1
-        nameLabel.Position = UDim2.new(0,12,0,0)
-        nameLabel.Size = UDim2.new(1,-15,0,22)
+        nameLabel.Position = UDim2.new(0,11,0,0)
+        nameLabel.Size = UDim2.new(1,-14,0,20)
         nameLabel.Font = Enum.Font.Code
-        nameLabel.Text = entry.Name .. "  (" .. entry.Class .. ")"
+        nameLabel.Text = entry.Name .. "  [" .. entry.Class .. "]"
         nameLabel.TextColor3 = Color3.fromRGB(200,200,200)
         nameLabel.TextSize = 9
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-        local pathLabel = Instance.new("TextLabel")
-        pathLabel.Parent = btn
-        pathLabel.BackgroundTransparency = 1
-        pathLabel.Position = UDim2.new(0,12,0,12)
-        pathLabel.Size = UDim2.new(1,-15,0,10)
-        pathLabel.Font = Enum.Font.Code
-        pathLabel.Text = entry.Path
-        pathLabel.TextColor3 = Color3.fromRGB(100,100,120)
-        pathLabel.TextSize = 8
-        pathLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-        -- Click handler - show source
         btn.MouseButton1Click:Connect(function()
-            local src = entry.Source
-            if src and #src > 0 then
-                -- Highlighted display
-                local escaped = src:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+            if entry.Source and #entry.Source > 0 then
+                local escaped = entry.Source:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
                 local header = string.format('<font color="rgb(0,255,120)">--[[ %s | %s ]]</font>\n\n', entry.Path, entry.Class)
                 UI.SourceText.Text = header .. escaped
                 local sz = UI.SourceText.TextBounds
                 UI.SourceView.CanvasSize = UDim2.new(0,0,0,sz.Y+20)
                 UI.SourceView.CanvasPosition = Vector2.new(0,0)
-                SetStatus("Viewing: " .. entry.Path)
+                SetStatus("Source: " .. entry.Path)
             else
-                UI.SourceText.Text = string.format('<font color="rgb(255,200,0)">[%s] %s</font>\n\n<font color="rgb(150,150,180)">Path: %s</font>\n\n<font color="rgb(100,100,130)">No source code available (RemoteEvent/RemoteFunction)</font>',
+                -- Remote bez source'a - pokaż referencje
+                local refs = Data.RemoteRefs[entry.Name] or {}
+                local txt = string.format('<font color="rgb(255,200,0)">[%s] %s</font>\n\n<font color="rgb(150,150,180)">Path: %s</font>\n\n',
                     entry.Class, entry.Name, entry.Path)
+
+                if #refs > 0 then
+                    txt = txt .. string.format('<font color="rgb(0,255,120)">This remote is referenced in %d script(s):</font>\n\n', #refs)
+                    for _, r in ipairs(refs) do
+                        local esc = r.Source:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+                        txt = txt .. string.format('<font color="rgb(100,200,255)">─ [%s] %s</font>\n<font color="rgb(100,100,130)">%s</font>\n\n%s\n\n<font color="rgb(60,60,80)">─────────────────────</font>\n\n',
+                            r.Class, r.Path, r.Path, esc)
+                    end
+                else
+                    txt = txt .. '<font color="rgb(255,100,50)">No scripts reference this remote by name.</font>\n\n'
+                    txt = txt .. '<font color="rgb(150,150,180)">RemoteEvent/RemoteFunction don\'t have their own source code.\nThey are triggered FROM other scripts via FireServer()/InvokeServer().\nThe code that handles them is on the server side and not visible.</font>'
+                end
+                UI.SourceText.Text = txt
                 local sz = UI.SourceText.TextBounds
                 UI.SourceView.CanvasSize = UDim2.new(0,0,0,sz.Y+20)
-                SetStatus("Viewing: " .. entry.Path)
+                UI.SourceView.CanvasPosition = Vector2.new(0,0)
+                SetStatus("References for: " .. entry.Name .. " (" .. #refs .. " scripts)")
             end
         end)
 
-        -- Hover effect
         btn.MouseEnter:Connect(function()
             btn.BackgroundColor3 = Color3.fromRGB(25,25,40)
         end)
@@ -420,13 +404,11 @@ local function PopulateScriptList(filter)
         end)
     end
 
-    -- Update canvas size
     local count = #entries
-    UI.ScriptList.CanvasSize = UDim2.new(0,0,0, count * 24 + 10)
+    UI.ScriptList.CanvasSize = UDim2.new(0,0,0, count * 21 + 10)
 
-    -- Update label
     local labelMap = {
-        ALL = "All Scripts",
+        ALL = "All Items",
         SCRIPTS = "Server Scripts",
         LOCALS = "Local Scripts",
         MODULES = "Module Scripts",
@@ -441,25 +423,22 @@ local function PopulateScriptList(filter)
     end
 end
 
--- ===== FILTER SETUP =====
+-- ===== FILTERS =====
 local function SetupFilters()
     for name, btn in pairs(UI.FilterBtns) do
         btn.MouseButton1Click:Connect(function()
-            -- Reset all colors
             for _, b in pairs(UI.FilterBtns) do
                 b.BackgroundColor3 = Color3.fromRGB(30,30,45)
                 b.TextColor3 = Color3.fromRGB(180,180,200)
             end
-            -- Highlight selected
             btn.BackgroundColor3 = Color3.fromRGB(0,100,60)
             btn.TextColor3 = Color3.fromRGB(0,255,120)
-            -- Populate
             PopulateScriptList(name)
         end)
     end
 end
 
--- ===== SCANNER =====
+-- ===== ANALYZER =====
 local function AnalyzeScript(name, path, src, class)
     local sl = src:lower()
 
@@ -491,15 +470,58 @@ local function AnalyzeScript(name, path, src, class)
         end
     end
 
-    local vulns = {}
-    if sl:find("fireserver",1,true) and not sl:find("validat",1,true) and not sl:find("check",1,true) then
-        table.insert(vulns, {Type="Unvalidated FireServer", Sev="HIGH"})
+    -- Find remote references in this script
+    -- Match: AnythingThatEndsWith:FireServer(...) or :InvokeServer(...)
+    for remName, _ in pairs(Data.RemoteRefs) do
+        local escName = remName:gsub("([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
+        if sl:find(escName, 1, true) then
+            -- This script references this remote
+            local found = false
+            for _, r in ipairs(Data.RemoteRefs[remName]) do
+                if r.Path == path then found = true; break end
+            end
+            if not found then
+                table.insert(Data.RemoteRefs[remName], {Name=name, Path=path, Source=src, Class=class})
+            end
+        end
     end
+
+    -- Also scan for FireServer/InvokeServer calls
+    local _, countFS = sl:gsub(":fireserver", "")
+    local _, countIS = sl:gsub(":invokeserver", "")
+    if countFS + countIS > 0 then
+        -- Find which remotes are fired
+        -- Pattern like: RemoteName:FireServer or "RemoteName":FireServer
+        for _, v in ipairs(Data.Remotes) do
+            local rn = v.Name:gsub("([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
+            if sl:find(rn, 1, true) then
+                local found = false
+                for _, r in ipairs(Data.RemoteRefs[v.Name]) do
+                    if r.Path == path then found = true; break end
+                end
+                if not found then
+                    table.insert(Data.RemoteRefs[v.Name], {Name=name, Path=path, Source=src, Class=class})
+                end
+            end
+        end
+        for _, v in ipairs(Data.RemoteFuncs) do
+            local rn = v.Name:gsub("([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
+            if sl:find(rn, 1, true) then
+                local found = false
+                for _, r in ipairs(Data.RemoteRefs[v.Name]) do
+                    if r.Path == path then found = true; break end
+                end
+                if not found then
+                    table.insert(Data.RemoteRefs[v.Name], {Name=name, Path=path, Source=src, Class=class})
+                end
+            end
+        end
+    end
+
+    -- Vulnerabilities
+    local vulns = {}
     if sl:find("loadstring",1,true) then
         table.insert(vulns, {Type="loadstring() code execution", Sev="CRITICAL"})
-    end
-    if sl:find("httpget",1,true) or sl:find("httppost",1,true) then
-        table.insert(vulns, {Type="External HTTP requests", Sev="HIGH"})
     end
     if sl:find("getrawmetatable",1,true) or sl:find("setrawmetatable",1,true) then
         table.insert(vulns, {Type="Raw metatable manipulation", Sev="CRITICAL"})
@@ -519,6 +541,7 @@ local function AnalyzeScript(name, path, src, class)
     end
 end
 
+-- ===== SCANNER =====
 local function ScanRecursive(inst, depth)
     depth = depth or 0
     if depth > 60 then return end
@@ -545,9 +568,11 @@ local function ScanRecursive(inst, depth)
             local src = inst.Source or ""
             table.insert(Data.Modules, {Name=inst.Name, Path=path, Source=src, Len=#src})
             table.insert(Data.AllSources, {Name=inst.Name, Path=path, Source=src, Class="ModuleScript"})
+            AnalyzeScript(inst.Name, path, src, "ModuleScript")
 
         elseif cls == "RemoteEvent" then
             table.insert(Data.Remotes, {Name=inst.Name, Path=path, Parent=tostring(inst.Parent)})
+            Data.RemoteRefs[inst.Name] = Data.RemoteRefs[inst.Name] or {}
             local nl = inst.Name:lower()
             if nl:find("currency",1,true) or nl:find("money",1,true) or nl:find("coin",1,true)
                or nl:find("give",1,true) or nl:find("add",1,true) or nl:find("set",1,true)
@@ -561,6 +586,7 @@ local function ScanRecursive(inst, depth)
 
         elseif cls == "RemoteFunction" then
             table.insert(Data.RemoteFuncs, {Name=inst.Name, Path=path, Parent=tostring(inst.Parent)})
+            Data.RemoteRefs[inst.Name] = Data.RemoteRefs[inst.Name] or {}
             local nl = inst.Name:lower()
             if nl:find("currency",1,true) or nl:find("money",1,true) or nl:find("coin",1,true)
                or nl:find("give",1,true) or nl:find("add",1,true) or nl:find("set",1,true)
@@ -576,11 +602,6 @@ local function ScanRecursive(inst, depth)
             ScanRecursive(ch, depth+1)
         end
     end)
-
-    if not ok then
-        local nm = "unknown"
-        pcall(function() nm = inst.Name end)
-    end
 end
 
 local function ScanService(svcName)
@@ -591,26 +612,25 @@ local function ScanService(svcName)
     end
 end
 
--- ===== MAIN SCAN =====
+-- ===== START SCAN =====
 local function StartScan()
     Data = {Scripts={}, Locals={}, Modules={}, Remotes={}, RemoteFuncs={},
             AntiCheats={}, AdminSys={}, CurrencySys={}, Backdoors={},
-            Vulns={}, Exploits={}, AllSources={}, ScanCount=0}
+            Vulns={}, Exploits={}, AllSources={}, RemoteRefs={}, ScanCount=0}
 
-    -- Reset source viewer
     UI.SourceText.Text = "Scanning... please wait."
     UI.SourceView.CanvasSize = UDim2.new(0,0,0,50)
 
-    SetStatus("Starting full scan...")
+    SetStatus("Scanning game...")
 
     local svcs = {"Workspace","ReplicatedStorage","ReplicatedFirst","ServerScriptService",
                   "ServerStorage","StarterGui","StarterPack","Lighting"}
     for _, s in ipairs(svcs) do
-        SetStatus("Scanning " .. s .. "...")
+        SetStatus("Scanning " .. s)
         ScanService(s)
     end
 
-    SetStatus("Scanning Players...")
+    SetStatus("Scanning players...")
     pcall(function()
         for _, plr in pairs(Players:GetPlayers()) do
             pcall(function() ScanRecursive(plr) end)
@@ -631,10 +651,29 @@ local function StartScan()
 
     Data.ScanCount = #Data.Scripts + #Data.Locals + #Data.Modules + #Data.Remotes + #Data.RemoteFuncs
 
-    -- Populate list
+    -- Now do a SECOND PASS to find references to remotes
+    -- Scan all script sources for remote names
+    SetStatus("Finding remote references...")
+    for _, srcData in ipairs(Data.AllSources) do
+        for remName, refList in pairs(Data.RemoteRefs) do
+            local sl = srcData.Source:lower()
+            local escName = remName:gsub("([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
+            if sl:find(escName, 1, true) then
+                local found = false
+                for _, r in ipairs(refList) do
+                    if r.Path == srcData.Path then found = true; break end
+                end
+                if not found then
+                    table.insert(refList, {Name=srcData.Name, Path=srcData.Path, Source=srcData.Source, Class=srcData.Class})
+                end
+            end
+        end
+        task.wait()
+    end
+
     PopulateScriptList("ALL")
 
-    -- Summary in source viewer
+    -- Summary
     local summary = string.format([[
 <font color="rgb(0,255,120)">╔══════════════════════════════════════╗
 ║        SCAN COMPLETE                 ║
@@ -652,8 +691,9 @@ local function StartScan()
 <font color="rgb(255,100,0)">  Vulnerabilities:    %d</font>
 <font color="rgb(255,0,0)">  Exploit vectors:    %d</font>
 
-<font color="rgb(150,200,255)">Use the filter buttons at the top to browse.
-Click any script name to view its FULL source code.</font>
+<font color="rgb(150,200,255)">When you click a RemoteEvent/RemoteFunction,
+it will show you which scripts reference it
+with their FULL source code.</font>
 ]],
         #Data.Scripts, #Data.Locals, #Data.Modules,
         #Data.Remotes, #Data.RemoteFuncs,
@@ -665,20 +705,18 @@ Click any script name to view its FULL source code.</font>
     local sz = UI.SourceText.TextBounds
     UI.SourceView.CanvasSize = UDim2.new(0,0,0,sz.Y+20)
 
-    -- Generate and copy exploit commands
+    -- Auto-copy exploit commands
     if #Data.Exploits > 0 then
-        local cmdLine = "-- Fire all currency/admin remotes:\n"
+        local cmdLine = "-- Exploit commands for " .. #Data.Exploits .. " targets:\n"
         for _, e in ipairs(Data.Exploits) do
             if e.Type == "RemoteEvent" then
-                cmdLine = cmdLine .. string.format("pcall(function() for _,v in pairs(game:GetDescendants()) do if v:IsA('RemoteEvent') and v.Name == '%s' then v:FireServer(999999) v:FireServer(game.Players.LocalPlayer, 999999) v:FireServer('add', 999999) end end end)\n", e.Name)
+                cmdLine = cmdLine .. string.format("for _,v in pairs(game:GetDescendants()) do if v:IsA('RemoteEvent') and v.Name == '%s' then v:FireServer(999999) v:FireServer(game.Players.LocalPlayer, 999999) end end\n", e.Name)
             end
         end
-        pcall(function()
-            SetClip(cmdLine)
-        end)
+        pcall(function() SetClip(cmdLine) end)
     end
 
-    SetStatus(string.format("Done! %d scripts found. Click filter buttons to browse, click script to view source.", Data.ScanCount))
+    SetStatus(string.format("Done! %d items. Click REMOTES filter, then click any remote to see its referencers.", Data.ScanCount))
 end
 
 -- ===== EXPORT =====
@@ -691,29 +729,19 @@ local function ExportResults()
     report = report .. string.format(" Date: %s\n", os.date("%Y-%m-%d %H:%M:%S"))
     report = report .. "============================================\n\n"
 
-    report = report .. "=== SCRIPTS (" .. #Data.Scripts + #Data.Locals + #Data.Modules .. " total) ===\n\n"
+    report = report .. "=== ALL SCRIPTS ===\n\n"
     for _, v in ipairs(Data.AllSources) do
         report = report .. string.format("--[[ %s (%s) ]]\n%s\n\n---\n\n", v.Path, v.Class, v.Source)
     end
 
-    report = report .. "=== ANTI-CHEAT SYSTEMS ===\n"
-    for _, v in ipairs(Data.AntiCheats) do
-        report = report .. string.format("  %s (pattern: %s)\n", v.Path, v.Pattern)
-    end
-
-    report = report .. "\n=== ADMIN SYSTEMS ===\n"
-    for _, v in ipairs(Data.AdminSys) do
-        report = report .. string.format("  %s (pattern: %s)\n", v.Path, v.Pattern)
-    end
-
-    report = report .. "\n=== CURRENCY SYSTEMS ===\n"
-    for _, v in ipairs(Data.CurrencySys) do
-        report = report .. string.format("  %s (pattern: %s)\n", v.Path, v.Pattern)
-    end
-
-    report = report .. "\n=== BACKDOORS ===\n"
-    for _, v in ipairs(Data.Backdoors) do
-        report = report .. string.format("  %s (pattern: %s)\n", v.Path, v.Pattern)
+    report = report .. "\n\n=== REMOTE REFERENCES ===\n\n"
+    for remName, refs in pairs(Data.RemoteRefs) do
+        report = report .. string.format("--- Remote: %s (%d references) ---\n", remName, #refs)
+        for _, r in ipairs(refs) do
+            report = report .. string.format("  Referenced by: %s (%s)\n", r.Path, r.Class)
+            report = report .. r.Source .. "\n\n"
+        end
+        report = report .. "================================\n\n"
     end
 
     report = report .. "\n=== EXPLOIT VECTORS ===\n"
@@ -721,25 +749,18 @@ local function ExportResults()
         report = report .. string.format("  [%s] %s (%s) - %s\n", v.Risk, v.Name, v.Type, v.Payload)
     end
 
-    local ok = pcall(function()
-        SetClip(report)
+    local ok = pcall(function() SetClip(report) end)
+    if ok then
         SetStatus("Full report copied to clipboard!")
-    end)
-
-    if not ok then
-        -- Too big, just summary
-        local summary = string.format(
-            "Audit: %d scripts, %d locals, %d modules, %d remotes, %d AC, %d admin, %d currency, %d backdoors, %d vulns, %d exploits",
-            #Data.Scripts, #Data.Locals, #Data.Modules,
+    else
+        local summary = string.format("Audit: %d scripts, %d remotes, %d AC, %d backdoors, %d exploits",
+            #Data.Scripts + #Data.Locals + #Data.Modules,
             #Data.Remotes + #Data.RemoteFuncs,
-            #Data.AntiCheats, #Data.AdminSys, #Data.CurrencySys,
-            #Data.Backdoors, #Data.Vulns, #Data.Exploits
-        )
+            #Data.AntiCheats, #Data.Backdoors, #Data.Exploits)
         pcall(function() SetClip(summary) end)
-        SetStatus("Summary copied (full report was too large for clipboard)")
+        SetStatus("Summary copied (full report too large for clipboard)")
     end
 
-    -- File save if writefile available
     pcall(function()
         local fname = string.format("Audit_%s_%s.txt", tostring(game.GameId), os.date("%Y%m%d_%H%M%S"))
         writefile(fname, report)
@@ -758,22 +779,21 @@ UI.ClearBtn.MouseButton1Click:Connect(function()
     SetStatus("Cleared.")
 end)
 
-SetStatus("Ready. Click SCAN to audit all scripts.")
+SetStatus("Ready. Click START SCAN to audit.")
 
--- Show initial instructions
 UI.SourceText.Text = [[
-<font color="rgb(0,255,120)">╔══════════════════════════════════════╗
-║   Roblox Security Auditor v5.0       ║
-║   Full Source Viewer Edition         ║
-╚══════════════════════════════════════╝</font>
+<font color="rgb(0,255,120)">╔══════════════════════════════════════════════╗
+║   Roblox Security Auditor v5.1              ║
+║   With Remote Reference Finder              ║
+╚══════════════════════════════════════════════╝</font>
 
 <font color="rgb(150,200,255)">How to use:</font>
 
-<font color="rgb(0,200,255)">1.</font> Click <font color="rgb(0,255,100)">[▶ SCAN]</font> to scan the entire game
-<font color="rgb(0,200,255)">2.</font> Use filter buttons to browse categories
-<font color="rgb(0,200,255)">3.</font> <font color="rgb(255,255,0)">Click any script name</font> to view its FULL source
-<font color="rgb(0,200,255)">4.</font> Click <font color="rgb(50,150,255)">[📋 COPY]</font> to export all to clipboard
-
-<font color="rgb(100,100,130)">The script extracts ALL source code from every
-script in the game and displays it here.</font>
+<font color="rgb(0,200,255)">1.</font> Click <font color="rgb(0,255,100)">[▶ START SCAN]</font>
+<font color="rgb(0,200,255)">2.</font> Browse with filter buttons
+<font color="rgb(0,200,255)">3.</font> Click <font color="rgb(255,255,0)">any script</font> → <font color="rgb(0,255,100)">shows its FULL source</font>
+<font color="rgb(0,200,255)">4.</font> Click a <font color="rgb(200,100,255)">RemoteEvent/RemoteFunction</font>
+    → shows <font color="rgb(255,255,0)">which scripts reference it</font>
+    → with their <font color="rgb(0,255,100)">full source code</font>
+<font color="rgb(0,200,255)">5.</font> <font color="rgb(50,150,255)">[📋 COPY]</font> = export everything to clipboard
 ]]
