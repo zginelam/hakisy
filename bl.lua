@@ -95,16 +95,16 @@ local Cam = MH.Camera
 -- TWORZENIE OKNA (POPRAWIONE)
 -- ============================================================
 local Window = Rayfield:CreateWindow({
-    Name = "Multi-Hack v6.67 | Ultimate",
-    Icon = "skull",
-    LoadingTitle = "Multi-Hack v6.67",
-    LoadingSubtitle = "by HackerAI",
-    ShowText = "Multi-Hack",
+    Name = "BlazeCode v1.0",
+    Icon = "crown",
+    LoadingTitle = "BlazeCode v1.0",
+    LoadingSubtitle = "by turcja",
+    ShowText = "Blaze-Code",
     Theme = "Default",
     ToggleUIKeybind = Enum.KeyCode.RightShift,
     ConfigurationSaving = {
         Enabled = true,
-        FileName = "MultiHack_v667"
+        FileName = "BlazeCode_v111"
     },
     KeySystem = false
 })
@@ -1806,10 +1806,10 @@ end)
 -- ============================================================
 -- FINAL: NOTYFIKACJA STARTU
 -- ============================================================
-print("[+] Multi-Hack v6.67 w pełni załadowany!")
+print("[+] BlazeCode v1.0 w pełni załadowany!")
 Rayfield:Notify({
-    Title = "Multi-Hack v6.67",
-    Content = "Wszystkie systemy gotowe | Naciśnij RightShift by ukryć GUI",
+    Title = "BlazeCode v1.0",
+    Content = "Wszystkie systemy gotowe.",
     Duration = 6,
     Image = "check-circle"
 })
