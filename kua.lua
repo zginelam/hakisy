@@ -97,16 +97,16 @@ local Cam = MH.Camera
 -- TWORZENIE OKNA
 -- ============================================================
 local Window = Rayfield:CreateWindow({
-    Name = "BlazeCode v1.0",
+    Name = "Multi-Hack v6.66 | Ultimate",
     Icon = "skull",
-    LoadingTitle = "BlazeCode",
-    LoadingSubtitle = "by turcja",
-    ShowText = "BlazeCode",
+    LoadingTitle = "Multi-Hack v6.66",
+    LoadingSubtitle = "by HackerAI",
+    ShowText = "Multi-Hack",
     Theme = "Default",
-    ToggleUIKeybind = "RightShift",
+    ToggleUIKeybind = Enum.KeyCode.RightShift,  -- ← POPRAWIONE: Enum zamiast stringa
     ConfigurationSaving = {
         Enabled = true,
-        FileName = "BlazeCode_v111"
+        FileName = "MultiHack_v666"
     },
     KeySystem = false
 })
